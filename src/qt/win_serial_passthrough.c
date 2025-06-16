@@ -55,32 +55,66 @@ plat_serpt_close(void *priv)
     CloseHandle((HANDLE) dev->master_fd);
 }
 
-static void
+//static void
+//plat_serpt_write_vcon(serial_passthrough_t *dev, uint8_t data)
+//{
+//#if 0
+//    fd_set wrfds;
+//    int res;
+//#endif
+//
+//    /* We cannot use select here, this would block the hypervisor! */
+//#if 0
+//    FD_ZERO(&wrfds);
+//    FD_SET(ctx->master_fd, &wrfds);
+//
+//    res = select(ctx->master_fd + 1, NULL, &wrfds, NULL, NULL);
+//
+//    if (res <= 0)
+//        return;
+//#endif
+//
+//    /* just write it out */
+//#if 0
+//    fwrite(dev->master_fd, &data, 1);
+//#endif
+//    DWORD bytesWritten = 0;
+//    WriteFile((HANDLE) dev->master_fd, &data, 1, &bytesWritten, NULL);
+//}
+
+void
 plat_serpt_write_vcon(serial_passthrough_t *dev, uint8_t data)
 {
-#if 0
-    fd_set wrfds;
-    int res;
-#endif
-
-    /* We cannot use select here, this would block the hypervisor! */
-#if 0
-    FD_ZERO(&wrfds);
-    FD_SET(ctx->master_fd, &wrfds);
-
-    res = select(ctx->master_fd + 1, NULL, &wrfds, NULL, NULL);
-
-    if (res <= 0)
-        return;
-#endif
-
-    /* just write it out */
-#if 0
-    fwrite(dev->master_fd, &data, 1);
-#endif
     DWORD bytesWritten = 0;
-    WriteFile((HANDLE) dev->master_fd, &data, 1, &bytesWritten, NULL);
+
+    // If a previous async write is still pending, wait (or optionally skip/write queue)
+    if (dev->ov_write_pending) {
+        DWORD result = WaitForSingleObject(dev->ov_write_event, 0); // non-blocking wait
+        if (result == WAIT_TIMEOUT) {
+            // Still writing, skip or queue
+            return;
+        }
+        // Optionally call GetOverlappedResult to confirm completion
+        GetOverlappedResult((HANDLE) dev->master_fd, &dev->ov_write, &bytesWritten, FALSE);
+        dev->ov_write_pending = FALSE;
+    }
+
+    // Reset the event before reusing
+    ResetEvent(dev->ov_write_event);
+    memset(&dev->ov_write, 0, sizeof(dev->ov_write));
+    dev->ov_write.hEvent = dev->ov_write_event;
+
+    // Start async write
+    if (!WriteFile((HANDLE) dev->master_fd, &data, 1, NULL, &dev->ov_write)) {
+        DWORD err = GetLastError();
+        if (err == ERROR_IO_PENDING) {
+            dev->ov_write_pending = TRUE;
+        } else {
+            // TODO: JBO: plat_serpt_write_vcon: Async write failed
+        }
+    }
 }
+
 
 void
 plat_serpt_set_params(void *priv)
@@ -142,13 +176,41 @@ plat_serpt_write(void *priv, uint8_t data)
     }
 }
 
+//uint8_t
+//plat_serpt_read_vcon(serial_passthrough_t *dev, uint8_t *data)
+//{
+//    DWORD bytesRead = 0;
+//    ReadFile((HANDLE) dev->master_fd, data, 1, &bytesRead, NULL);
+//    return !!bytesRead;
+//}
+
 uint8_t
 plat_serpt_read_vcon(serial_passthrough_t *dev, uint8_t *data)
 {
     DWORD bytesRead = 0;
-    ReadFile((HANDLE) dev->master_fd, data, 1, &bytesRead, NULL);
-    return !!bytesRead;
+
+    // If no read is pending, issue one
+    if (!dev->ov_read_pending) {
+        ResetEvent(dev->ov_read_event);
+        if (!ReadFile((HANDLE) dev->master_fd, dev->ov_read_buffer, 1, NULL, &dev->ov_read)) {
+            DWORD err = GetLastError();
+            if (err != ERROR_IO_PENDING) {
+                return 0; // Read failed
+            }
+        }
+        dev->ov_read_pending = TRUE;
+    }
+
+    // Poll for completion
+    if (GetOverlappedResult((HANDLE) dev->master_fd, &dev->ov_read, &bytesRead, FALSE)) {
+        *data           = dev->ov_read_buffer[0];
+        dev->ov_read_pending = FALSE;
+        return 1;
+    }
+
+    return 0; // Not ready yet
 }
+
 
 int
 plat_serpt_read(void *priv, uint8_t *data)
@@ -173,7 +235,21 @@ open_pseudo_terminal(serial_passthrough_t *dev)
     char ascii_pipe_name[1024] = { 0 };
     strncpy(ascii_pipe_name, dev->named_pipe, sizeof(ascii_pipe_name));
     ascii_pipe_name[1023] = '\0';
-    dev->master_fd        = (intptr_t) CreateNamedPipeA(ascii_pipe_name, PIPE_ACCESS_DUPLEX, PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_NOWAIT, 1, 65536, 65536, NMPWAIT_USE_DEFAULT_WAIT, NULL);
+    
+    
+    //dev->master_fd        = (intptr_t) CreateNamedPipeA(ascii_pipe_name, PIPE_ACCESS_DUPLEX, PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_NOWAIT, 2, 65536, 65536, NMPWAIT_USE_DEFAULT_WAIT, NULL);
+
+    //dev->master_fd = (intptr_t) CreateFileA("\\\\.\\pipe\\xtide", GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    //dev->master_fd = (intptr_t) CreateFileA("\\\\.\\pipe\\xtide", GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_FLAG_WRITE_THROUGH, NULL);
+
+    dev->master_fd = (intptr_t) CreateFileA("\\\\.\\pipe\\xtide", 
+        GENERIC_READ | GENERIC_WRITE, 
+        0, 
+        NULL, 
+        OPEN_EXISTING, 
+        FILE_ATTRIBUTE_NORMAL  | FILE_FLAG_OVERLAPPED, 
+        NULL);
+
     if (dev->master_fd == (intptr_t) INVALID_HANDLE_VALUE) {
         wchar_t errorMsg[1024] = { 0 };
         wchar_t finalMsg[1024] = { 0 };
@@ -223,7 +299,25 @@ plat_serpt_open_device(void *priv)
 
     switch (dev->mode) {
         case SERPT_MODE_VCON:
-            if (open_pseudo_terminal(dev)) {
+            if (open_pseudo_terminal(dev)) 
+            {
+
+                //dev->ov_event = CreateEvent(NULL, TRUE, FALSE, NULL);
+                //memset(&dev->ov, 0, sizeof(dev->ov));
+                //dev->ov.hEvent  = dev->ov_event;
+                //dev->ov_pending = FALSE;
+
+                dev->ov_read_event = CreateEvent(NULL, TRUE, FALSE, NULL);
+                memset(&dev->ov_read, 0, sizeof(dev->ov_read));
+                dev->ov_read.hEvent  = dev->ov_read_event;
+                dev->ov_read_pending = FALSE;
+
+                dev->ov_write_event = CreateEvent(NULL, TRUE, FALSE, NULL);
+                memset(&dev->ov_write, 0, sizeof(dev->ov_write));
+                dev->ov_write.hEvent  = dev->ov_write_event;
+                dev->ov_write_pending = FALSE;
+
+
                 return 0;
             }
             break;

@@ -57,6 +57,7 @@ static serial_device_t serial_devices[SERIAL_MAX];
 
 static void            serial_xmit_d_empty_evt(void *priv);
 
+#define ENABLE_SERIAL_LOG  1
 #ifdef ENABLE_SERIAL_LOG
 int serial_do_log = ENABLE_SERIAL_LOG;
 
@@ -167,11 +168,20 @@ serial_receive_timer(void *priv)
     if (dev->fifo_enabled) {
         /* FIFO mode. */
         if (dev->out_new != 0xffff) {
-            /* We have received a byte into the RSR. */
+            /* We have received a byte into the RSR 
+            
+            In a Universal Asynchronous Receiver/Transmitter (UART) system, 
+            the Receive Shift Register (RSR) is a crucial component for handling 
+            serial data received from a peripheral device. It essentially takes 
+            the incoming serial bits and shifts them into a register, making 
+            them accessible to the rest of the UART's circuitry, such as a FIFO. 
+            
+            */
 
             /* Clear FIFO timeout. */
             serial_clear_timeout(dev);
 
+            // Van RSR naar FIFO
             fifo_write_evt((uint8_t) (dev->out_new & 0xff), dev->rcvr_fifo);
             dev->out_new = 0xffff;
 
