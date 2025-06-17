@@ -75,6 +75,17 @@ host_to_serial_cb(void *priv)
 
     uint8_t byte;
 
+    if (dev->highspeed_mode) {
+        while (plat_serpt_read(dev, &byte)) {
+            serial_write_fifo(dev->serial, byte);
+        }
+
+        // Always re-arm the timer in highspeed mode to poll for new bytes
+        timer_on_auto(&dev->host_to_serial_timer, 100.0); // 0.1 ms
+
+        return;
+    }
+
     /* write_fifo has no failure indication, but if we write to fast, the host
      * can never fetch the bytes in time, so check if the fifo is full if in
      * fifo mode or if lsr has bit 0 set if not in fifo mode */
@@ -87,6 +98,7 @@ host_to_serial_cb(void *priv)
             goto no_write_to_machine;
         }
     }
+
     if (plat_serpt_read(dev, &byte)) {
 #if 0
         printf("got byte %02X\n", byte);
@@ -100,6 +112,14 @@ no_write_to_machine:
 #if 0
     serial_device_timeout(dev->serial);
 #endif
+
+    //if (dev->highspeed_mode) {
+    //    // Push next read immediately
+    //    timer_on_auto(&dev->host_to_serial_timer, 1.0); // 1 µs or as fast as 86Box's loop allows
+    //} else {
+    //    timer_on_auto(&dev->host_to_serial_timer, (1000000.0 / dev->baudrate) * (double) dev->bits);
+    //}
+
     timer_on_auto(&dev->host_to_serial_timer, (1000000.0 / dev->baudrate) * (double) dev->bits);
 }
 
@@ -178,12 +198,14 @@ serial_passthrough_dev_init(const device_t *info)
 {
     serial_passthrough_t *dev;
 
-    dev = (serial_passthrough_t *) calloc(1, sizeof(serial_passthrough_t));
+    dev       = (serial_passthrough_t *) calloc(1, sizeof(serial_passthrough_t));
     dev->mode = device_get_config_int("mode");
 
     dev->port      = device_get_instance() - 1;
     dev->baudrate  = device_get_config_int("baudrate");
     dev->data_bits = device_get_config_int("data_bits");
+
+    dev->highspeed_mode = device_get_config_int("highspeed_mode");
 
     /* Attach passthrough device to a COM port */
     dev->serial = serial_attach_ex(dev->port, serial_passthrough_rcr_cb,
@@ -201,6 +223,7 @@ serial_passthrough_dev_init(const device_t *info)
     serial_passthrough_log("%s: port=COM%d\n", info->name, dev->port + 1);
     serial_passthrough_log("%s: baud=%f\n", info->name, dev->baudrate);
     serial_passthrough_log("%s: mode=%s\n", info->name, serpt_mode_names[dev->mode]);
+    serial_passthrough_log("%s: highspeed mode=%d\n", info->name, dev->highspeed_mode);
 
     if (plat_serpt_open_device(dev)) {
         serial_passthrough_log("%s: not running\n", info->name);
@@ -354,6 +377,12 @@ static const device_config_t serial_passthrough_config[] = {
             { .description = ""                          }
         },
         .bios           = { { 0 } }
+    },
+    {
+        .name           = "highspeed_mode",
+        .description    = "Disable baud timing for max speed",
+        .type           = CONFIG_BINARY,
+        .default_int    = 0,
     },
     { .name = "", .description = "", .type = CONFIG_END }
 };

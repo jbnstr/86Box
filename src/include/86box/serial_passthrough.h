@@ -55,10 +55,7 @@ typedef struct serial_passthrough_s {
     char  named_pipe[1024];                    /* (Windows only) Name of the pipe. */
     void *backend_priv;                        /* Private platform backend data */
 
-    //OVERLAPPED ov;
-    //HANDLE     ov_event;
-    //uint8_t    ov_buffer[1];
-    //BOOL       ov_pending;
+    bool       highspeed_mode;
 
     OVERLAPPED ov_read;
     HANDLE     ov_read_event;
