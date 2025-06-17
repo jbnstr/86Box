@@ -80,7 +80,7 @@ host_to_serial_cb(void *priv)
             serial_write_fifo(dev->serial, byte);
         }
 
-        // Always re-arm the timer in highspeed mode to poll for new bytes
+        // Re-arm the timer in highspeed mode to poll for new bytes.
         timer_on_auto(&dev->host_to_serial_timer, 100.0); // 0.1 ms
 
         return;
@@ -112,13 +112,6 @@ no_write_to_machine:
 #if 0
     serial_device_timeout(dev->serial);
 #endif
-
-    //if (dev->highspeed_mode) {
-    //    // Push next read immediately
-    //    timer_on_auto(&dev->host_to_serial_timer, 1.0); // 1 µs or as fast as 86Box's loop allows
-    //} else {
-    //    timer_on_auto(&dev->host_to_serial_timer, (1000000.0 / dev->baudrate) * (double) dev->bits);
-    //}
 
     timer_on_auto(&dev->host_to_serial_timer, (1000000.0 / dev->baudrate) * (double) dev->bits);
 }
