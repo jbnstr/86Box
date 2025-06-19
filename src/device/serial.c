@@ -38,6 +38,8 @@
 #include <86box/serial.h>
 #include <86box/mouse.h>
 
+#include <86box/serial_passthrough.h>
+
 serial_port_t com_ports[SERIAL_MAX];
 
 enum {
@@ -56,6 +58,10 @@ static int             next_inst = 0;
 static serial_device_t serial_devices[SERIAL_MAX];
 
 static void            serial_xmit_d_empty_evt(void *priv);
+
+
+static void serial_rcvr_d_overrun_evt(void *priv);
+static void serial_rcvr_d_ready_evt(void *priv);
 
 #define ENABLE_SERIAL_LOG  1
 #ifdef ENABLE_SERIAL_LOG
@@ -161,6 +167,9 @@ serial_receive_timer(void *priv)
 {
     serial_t *dev = (serial_t *) priv;
 
+    if (is_highspeed_passthrough(dev))
+        return; // Skip: we already delivered the byte immediately
+
     serial_log("serial_receive_timer()\n");
 
     timer_on_auto(&dev->receive_timer, /* dev->bits * */ dev->transmit_period);
@@ -236,8 +245,50 @@ serial_write_fifo(serial_t *dev, uint8_t dat)
                ((dev->type >= SERIAL_16550) && dev->fifo_enabled) ?
                fifo_get_count(dev->rcvr_fifo) : 0);
 
-    if ((dev != NULL) && !(dev->mctrl & 0x10))
-        write_fifo(dev, dat);
+    // Skip when loopback.
+    if (!dev || (dev->mctrl & 0x10))
+        return;
+
+    write_fifo(dev, dat); // Sets out_new
+
+    if (is_highspeed_passthrough(dev)) {
+        // Immediately emulate receive completion (normally done in receive_timer)
+        if (dev->fifo_enabled) {
+
+            /* Clear FIFO timeout. */
+            serial_clear_timeout(dev);
+
+            //serial_log("JBO: now I'm here...\n");
+
+            //if (fifo_get_full(dev->rcvr_fifo)) {
+            //    serial_rcvr_d_overrun_evt(dev);
+            //    // Optional: drop the byte here instead of continuing
+            //}
+
+            // Van RSR naar FIFO
+            fifo_write_evt((uint8_t) (dev->out_new & 0xff), dev->rcvr_fifo);
+            dev->out_new = 0xffff;
+            
+            timer_on_auto(&dev->timeout_timer, 4.0 * dev->bits * dev->transmit_period);
+            
+            ////  Trigger FIFO ready interrupt (what the timer would do)
+            //serial_rcvr_d_ready_evt(dev); 
+
+
+            //// Force IRQ unconditionally, don't wait for trigger level
+            //dev->lsr |= 0x01;
+            //dev->int_status |= SERIAL_INT_RECEIVE;
+            //serial_update_ints(dev);
+
+        } else {
+            dev->dat = (uint8_t) (dev->out_new & 0xff);
+            
+            dev->lsr |= 0x01;
+            dev->int_status |= SERIAL_INT_RECEIVE;
+            serial_update_ints(dev);
+            dev->out_new = 0xffff;
+        }
+    }
 }
 
 void
@@ -245,7 +296,7 @@ serial_transmit(serial_t *dev, uint8_t val)
 {
     if (dev->mctrl & 0x10)
         write_fifo(dev, val);
-    else if (dev->sd->dev_write)
+    else if (dev->sd && dev->sd->dev_write)
         dev->sd->dev_write(dev, dev->sd->priv, val);
 
 #ifdef ENABLE_SERIAL_CONSOLE
@@ -496,6 +547,12 @@ serial_write(uint16_t addr, uint8_t val, void *priv)
 
     cycles -= ISA_CYCLES(8);
 
+
+    //if (is_highspeed_passthrough(dev)) {
+    //    serial_log("UART: highspeed enabled\n");
+    //}
+
+
     switch (addr & 7) {
         case 0:
             if (dev->lcr & 0x80) {
@@ -505,23 +562,59 @@ serial_write(uint16_t addr, uint8_t val, void *priv)
                 return;
             }
 
+            //if (dev->fifo_enabled && (fifo_get_count(dev->xmit_fifo) < 16)) {
+            //    /* FIFO mode, begin transmitting. */
+            //    timer_on_auto(&dev->transmit_timer, dev->transmit_period);
+            //    dev->transmit_enabled |= 1; /* Start moving. */
+            //    fifo_write_evt(val, dev->xmit_fifo);
+            //} else if (!dev->fifo_enabled) {
+            //    /* Indicate THR is no longer empty. */
+            //    dev->lsr &= 0x9f;
+            //    dev->int_status &= ~SERIAL_INT_TRANSMIT;
+            //    serial_update_ints(dev);
+            //
+            //    /* Non-FIFO mode, begin transmitting. */
+            //    timer_on_auto(&dev->transmit_timer, dev->transmit_period);
+            //    dev->transmit_enabled |= 1; /* Start moving. */
+            //    dev->thr = val;
+            //    dev->thr_empty = 0;
+            //}
+
             if (dev->fifo_enabled && (fifo_get_count(dev->xmit_fifo) < 16)) {
-                /* FIFO mode, begin transmitting. */
-                timer_on_auto(&dev->transmit_timer, dev->transmit_period);
-                dev->transmit_enabled |= 1; /* Start moving. */
+                /* FIFO mode */
                 fifo_write_evt(val, dev->xmit_fifo);
+
+                if (false && is_highspeed_passthrough(dev)) {
+                    // Transmit all pending bytes immediately
+                    int count = fifo_get_count(dev->xmit_fifo);
+                    while (count-- > 0) {
+                        uint8_t tx_val = fifo_read(dev->xmit_fifo);
+                        serial_transmit(dev, tx_val);
+                    }
+                } else {
+                    timer_on_auto(&dev->transmit_timer, dev->transmit_period);
+                    dev->transmit_enabled |= 1;
+                }
+
             } else if (!dev->fifo_enabled) {
-                /* Indicate THR is no longer empty. */
+                /* Non-FIFO mode */
                 dev->lsr &= 0x9f;
                 dev->int_status &= ~SERIAL_INT_TRANSMIT;
                 serial_update_ints(dev);
 
-                /* Non-FIFO mode, begin transmitting. */
-                timer_on_auto(&dev->transmit_timer, dev->transmit_period);
-                dev->transmit_enabled |= 1; /* Start moving. */
-                dev->thr = val;
+                dev->thr       = val;
                 dev->thr_empty = 0;
+
+                if (false && is_highspeed_passthrough(dev)) {
+                    serial_transmit(dev, val);
+                } else {
+                    timer_on_auto(&dev->transmit_timer, dev->transmit_period);
+                    dev->transmit_enabled |= 1;
+                }
             }
+
+
+
             break;
         case 1:
             if (dev->lcr & 0x80) {
@@ -565,13 +658,14 @@ serial_write(uint16_t addr, uint8_t val, void *priv)
                         fifo_set_trigger_len(dev->rcvr_fifo, 1);
                         break;
                     case 1:
-                        fifo_set_trigger_len(dev->rcvr_fifo, 4);
+                        // TODO: JBO: restore rcvr_fifo trigger length in case statement
+                        fifo_set_trigger_len(dev->rcvr_fifo, 1 /*4*/);
                         break;
                     case 2:
-                        fifo_set_trigger_len(dev->rcvr_fifo, 8);
+                        fifo_set_trigger_len(dev->rcvr_fifo, 1 /*8*/);
                         break;
                     case 3:
-                        fifo_set_trigger_len(dev->rcvr_fifo, 14);
+                        fifo_set_trigger_len(dev->rcvr_fifo, 1 /*14*/);
                         break;
 
                     default:
@@ -693,6 +787,8 @@ serial_read(uint16_t addr, void *priv)
                 /* FIFO mode. */
                 serial_clear_timeout(dev);
                 ret = fifo_read_evt(dev->rcvr_fifo);
+                
+                serial_log("JBO: guest read byte %02X from FIFO\n", ret);
 
                 if (dev->lsr & 0x01)
                     timer_on_auto(&dev->timeout_timer, 4.0 * dev->bits * dev->transmit_period);
@@ -730,6 +826,9 @@ serial_read(uint16_t addr, void *priv)
             ret = dev->mctrl;
             break;
         case 5:
+            
+            //serial_log("JBO: guest read LSR = %02X\n", dev->lsr);
+
             ret = dev->lsr;
             if (dev->lsr & 0x1f)
                 dev->lsr &= ~0x1e;
@@ -791,6 +890,10 @@ serial_setup(serial_t *dev, uint16_t addr, uint8_t irq)
     if (addr != 0x0000)
         io_sethandler(addr, 0x0008, serial_read, NULL, NULL, serial_write, NULL, NULL, dev);
     dev->irq = irq;
+
+    
+    bool isHighspeed = is_highspeed_passthrough(dev);
+    serial_log("UART: highspeed enabled: %d\n", isHighspeed);
 }
 
 void
@@ -830,6 +933,9 @@ serial_rcvr_d_ready_evt(void *priv)
 
     dev->int_status = (dev->int_status & ~SERIAL_INT_RECEIVE) |
                       (fifo_get_ready(dev->rcvr_fifo) ? SERIAL_INT_RECEIVE : 0);
+
+    serial_log("JBO: Trigger interrupt...\n");
+
     serial_update_ints(dev);
 }
 
@@ -987,13 +1093,13 @@ serial_init(const device_t *info)
         serial_transmit_period(dev);
         serial_update_speed(dev);
 
-        dev->rcvr_fifo = fifo64_init();
+        dev->rcvr_fifo = fifo4096_init();  /*fifo64_init();*/
         fifo_set_priv(dev->rcvr_fifo, dev);
         fifo_set_d_empty_evt(dev->rcvr_fifo, serial_rcvr_d_empty_evt);
         fifo_set_d_overrun_evt(dev->rcvr_fifo, serial_rcvr_d_overrun_evt);
         fifo_set_d_ready_evt(dev->rcvr_fifo, serial_rcvr_d_ready_evt);
         fifo_reset_evt(dev->rcvr_fifo);
-        fifo_set_len(dev->rcvr_fifo, 16);
+        fifo_set_len(dev->rcvr_fifo, 16 /*1024*/ /*16*/); // Werkt met 1024 en 16
 
         dev->xmit_fifo = fifo64_init();
         fifo_set_priv(dev->xmit_fifo, dev);

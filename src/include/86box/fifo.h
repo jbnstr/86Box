@@ -49,6 +49,9 @@ FIFO(16)
 FIFO(64)
 #define fifo64_init() fifo_init(64)
 
+FIFO(4096)
+#define fifo4096_init() fifo_init(4096)
+
 extern int        fifo_get_count(void *priv);
 extern void       fifo_write(uint8_t val, void *priv);
 extern void       fifo_write_tagged(uint8_t tag, uint8_t val, void *priv);

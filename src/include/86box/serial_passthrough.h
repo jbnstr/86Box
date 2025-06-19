@@ -73,5 +73,6 @@ extern bool           serial_passthrough_enabled[SERIAL_MAX - 1];
 extern const device_t serial_passthrough_device;
 
 extern void serial_passthrough_init(void);
+extern bool is_highspeed_passthrough(const serial_t *);
 
 #endif
