@@ -431,7 +431,7 @@ void
 fifo_set_trigger_len(void *priv, int trigger_len)
 {
     fifo_t *fifo = (fifo_t *) priv;
-
+    fifo_log("JBO: fifo_set_trigger_len: %d\n", trigger_len);
     fifo->trigger_len = trigger_len;
 }
 

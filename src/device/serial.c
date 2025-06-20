@@ -658,14 +658,13 @@ serial_write(uint16_t addr, uint8_t val, void *priv)
                         fifo_set_trigger_len(dev->rcvr_fifo, 1);
                         break;
                     case 1:
-                        // TODO: JBO: restore rcvr_fifo trigger length in case statement
-                        fifo_set_trigger_len(dev->rcvr_fifo, 1 /*4*/);
+                        fifo_set_trigger_len(dev->rcvr_fifo, 4);
                         break;
                     case 2:
-                        fifo_set_trigger_len(dev->rcvr_fifo, 1 /*8*/);
+                        fifo_set_trigger_len(dev->rcvr_fifo, 8);
                         break;
                     case 3:
-                        fifo_set_trigger_len(dev->rcvr_fifo, 1 /*14*/);
+                        fifo_set_trigger_len(dev->rcvr_fifo, 14);
                         break;
 
                     default:
