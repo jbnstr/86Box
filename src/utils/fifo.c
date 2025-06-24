@@ -534,8 +534,10 @@ fifo_init(int len)
         fifo = calloc(1, sizeof(fifo64_t));
     else if (len == 16)
         fifo = calloc(1, sizeof(fifo16_t));
-    else if (len == 4096)
-        fifo = calloc(1, sizeof(fifo4096_t));
+    //else if (len == 4096)
+    //    fifo = calloc(1, sizeof(fifo4096_t));
+    else if (len == 1024)
+        fifo = calloc(1, sizeof(fifo1024_t));
     else {
         fatal("FIFO  : Invalid FIFO length: %i\n", len);
         return NULL;

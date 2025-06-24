@@ -51,13 +51,18 @@ serial_passthrough_log(const char *fmt, ...)
 #    define serial_passthrough_log(fmt, ...)
 #endif
 
+
+
 void
 serial_passthrough_init(void)
 {
     for (uint8_t c = 0; c < (SERIAL_MAX - 1); c++) {
         if (serial_passthrough_enabled[c]) {
             /* Instance n for COM n */
-            device_add_inst(&serial_passthrough_device, c + 1);
+            serial_passthrough_t *dev = (serial_passthrough_t *)device_add_inst(&serial_passthrough_device, c + 1);
+            if (dev->highspeed_mode) {
+                serial_enable_highspeed_mode(dev->serial);
+            }
         }
     }
 }
@@ -93,14 +98,14 @@ host_to_serial_cb(void *priv)
 
     if (dev->highspeed_mode) {
         while (!fifo_get_full(dev->serial->rcvr_fifo) && plat_serpt_read(dev, &byte)) {
-
-            serial_passthrough_log("Read from pipe: %02X\n", byte);
+    
+            //serial_passthrough_log("Read from pipe: %02X\n", byte);
             serial_write_fifo(dev->serial, byte);
         }
-
+    
         // Re-arm the timer in highspeed mode to poll for new bytes.
         timer_on_auto(&dev->host_to_serial_timer, 100.0); // 0.1 ms
-
+    
         return;
     }
 
