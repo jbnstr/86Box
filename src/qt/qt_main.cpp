@@ -64,6 +64,7 @@ extern "C" {
 #    include <86box/win.h>
 #    include <shobjidl.h>
 #    include <windows.h>
+#    include "win/Debugger.h"
 #endif
 
 #include <thread>
@@ -524,6 +525,13 @@ main(int argc, char *argv[])
     QApplication app(argc, argv);
     QLocale::setDefault(QLocale::C);
     setlocale(LC_NUMERIC, "C");
+
+
+#ifdef Q_OS_WINDOWS
+#if defined(_DEBUG) || defined(DEBUG)
+    Diagnostics::Debugger::Launch();
+#endif
+#endif
 
 #ifdef Q_OS_WINDOWS
     Q_INIT_RESOURCE(darkstyle);
