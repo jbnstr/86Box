@@ -617,19 +617,11 @@ serial_write(uint16_t addr, uint8_t val, void *priv)
                 0    FIFO Enable                    We override this in highspeed mode -> do not disable FIFO
                 1    Receiver FIFO Reset            Reset `rcvr_fifo` contents/events
                 2    Transmit FIFO Reset            Reset `xmit_fifo` contents/events
+                3    Receiver/Transmit ready        Used for DMA (Direct Memory Access) signaling. 
+                                                    Not supported. Writting to this bit has no effect.
+                4,5  Reserved
                 6–7  Receiver Trigger Level Select  Set how many bytes in FIFO before raising interrupt
                 */
-
-                ////
-                //// Track what the guest expects to see when reading IIR.
-                //// 
-                //// The 16550 UART provides a way to detect FIFO presence via bit 
-                //// 6 of the IIR (Interrupt Identification Register). 
-                //// When FIFO is enabled report back 0xC0 (bit 6 and 7 are set): 
-                ////   bit 6 (0x40) FIFO is present and enabled.
-                ////   bit 7 (0x80) Sometimes set too, indicates FIFO is functioning properly.
-                ////
-                //dev->guest_visible_fifo_enabled = (val & 0x01) ? 0xC0 : 0x00;
 
                 // If FIFO enable bit (bit 0) changes from 0 -> 1, reset FIFOs.
                 if ((val ^ dev->fcr) & 0x01)
@@ -639,25 +631,12 @@ serial_write(uint16_t addr, uint8_t val, void *priv)
                 dev->fifo_enabled = val & 0x01; // Enable or disable the FIFO logic.
                 
                 //
-                // In highspeed mode we ignore (override) disabling of the FIFO by 
-                // the guest. The 16550 UART provides a way to detect FIFO presence 
-                // via the IIR (Interrupt Identification Register). Therfore we must 
-                // track what the guest expects to see when reading IIR.
-                //
-                // When FIFO is enabled we report back 0xC0 (bit 6 and 7 are set):
-                //   bit 6 (0x40) FIFO is present and enabled.
-                //   bit 7 (0x80) Sometimes set too, indicates FIFO is functioning properly.
-                //
-                //dev->guest_visible_fifo_enabled = dev->fifo_enabled ? 0xC0 : 0x00;
-
-
-                //
                 // In highspeed mode we ignore (override) disabling of the FIFO by
                 // the guest. The 16550 UART provides a way to detect FIFO presence
                 // via the IIR (Interrupt Identification Register). Therfore we must
                 // track what the guest expects to see when reading IIR.
                 //
-                dev->guest_visible_fifo_enabled = dev->fifo_enabled;
+                //dev->guest_visible_fifo_enabled = dev->fifo_enabled;
                 if (dev->highspeed_enabled && !dev->fifo_enabled) {
                     serial_log("Highspeed mode active - ignoring FIFO disable, preserving large FIFO\n");
                     dev->fifo_enabled = 1;
@@ -855,7 +834,7 @@ serial_read(uint16_t addr, void *priv)
             //    bit 6 (0x40) FIFO is present and enabled.
             //    bit 7 (0x80) Sometimes set too, indicates FIFO is functioning properly.
             //
-            if ((dev->fcr & 0x01) | dev->guest_visible_fifo_enabled)
+            if ((dev->fcr & 0x01) /*| dev->guest_visible_fifo_enabled*/)
                 ret |= 0xC0;
             
             break;

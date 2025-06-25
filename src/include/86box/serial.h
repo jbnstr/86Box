@@ -79,7 +79,7 @@ typedef struct serial_s {
     uint8_t fifo_enabled;
 
     uint8_t highspeed_enabled;
-    uint8_t guest_visible_fifo_enabled; // This is what we report in IIR
+    //uint8_t guest_visible_fifo_enabled; // This is what we report in IIR
     
     uint8_t bits;
     uint8_t data_bits;
