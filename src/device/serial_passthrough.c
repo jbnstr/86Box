@@ -96,7 +96,7 @@ host_to_serial_cb(void *priv)
 
     uint8_t byte;
 
-    if (dev->highspeed_mode) {
+    if (dev->highspeed_mode /*&& dev->serial->fifo_enabled*/) {
         while (!fifo_get_full(dev->serial->rcvr_fifo) && plat_serpt_read(dev, &byte)) {
     
             //serial_passthrough_log("Read from pipe: %02X\n", byte);
@@ -230,6 +230,8 @@ serial_passthrough_dev_init(const device_t *info)
         free(dev);
         return NULL;
     }
+
+    //dev->serial->highspeed_enabled = device_get_config_int("highspeed_mode");
 
     strncpy(dev->host_serial_path, device_get_config_string("host_serial_path"), 1023);
 #ifdef _WIN32
