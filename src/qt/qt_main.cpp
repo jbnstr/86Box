@@ -526,10 +526,26 @@ main(int argc, char *argv[])
     QLocale::setDefault(QLocale::C);
     setlocale(LC_NUMERIC, "C");
 
-
+    
 #ifdef Q_OS_WINDOWS
 #if defined(_DEBUG) || defined(DEBUG)
-    Diagnostics::Debugger::Launch();
+    int dbgbreak = 0;
+    for (int c = 1; c < argc; c++) {
+        if (strcasecmp(argv[c], "--dbgbreak") == 0) {
+            dbgbreak = 1;
+            break;
+        }
+    }
+
+    if (dbgbreak) {
+        //  Keep argv[0] (the program name) and remove argv[1], while passing the rest.
+        argc--;
+        for (int i = 1; i < argc; i++) {
+            argv[i] = argv[i + 1];
+        }
+
+        Diagnostics::Debugger::Launch();
+    }
 #endif
 #endif
 
