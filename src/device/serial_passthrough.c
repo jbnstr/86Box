@@ -73,21 +73,21 @@ serial_passthrough_write(UNUSED(serial_t *s), void *priv, uint8_t val)
     plat_serpt_write(priv, val);
 }
 
-bool
-is_highspeed_passthrough(const serial_t *dev)
-{
-    if (!dev || !dev->sd || !dev->sd->priv)
-        return false;
-
-    // Check if backend is serial passthrough (dev_write function pointer match)
-    if (dev->sd->dev_write != serial_passthrough_write)
-        return false;
-
-    const serial_passthrough_t *pt = (const serial_passthrough_t *) dev->sd->priv;
-    return pt->highspeed_mode;
-
-    //return false;
-}
+//bool
+//is_highspeed_passthrough(const serial_t *dev)
+//{
+//    if (!dev || !dev->sd || !dev->sd->priv)
+//        return false;
+//
+//    // Check if backend is serial passthrough (dev_write function pointer match)
+//    if (dev->sd->dev_write != serial_passthrough_write)
+//        return false;
+//
+//    const serial_passthrough_t *pt = (const serial_passthrough_t *) dev->sd->priv;
+//    return pt->highspeed_mode;
+//
+//    //return false;
+//}
 
 static void
 host_to_serial_cb(void *priv)

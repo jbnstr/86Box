@@ -38,7 +38,7 @@
 #include <86box/serial.h>
 #include <86box/mouse.h>
 
-#include <86box/serial_passthrough.h>
+//#include <86box/serial_passthrough.h>
 
 serial_port_t com_ports[SERIAL_MAX];
 
@@ -527,7 +527,7 @@ serial_write(uint16_t addr, uint8_t val, void *priv)
     cycles -= ISA_CYCLES(8);
 
 
-    //if (is_highspeed_passthrough(dev)) {
+    //if (dev->highspeed_enabled == 1) {
     //    serial_log("UART: highspeed enabled\n");
     //}
 
@@ -563,7 +563,7 @@ serial_write(uint16_t addr, uint8_t val, void *priv)
                 /* FIFO mode */
                 fifo_write_evt(val, dev->xmit_fifo);
 
-                if (false && is_highspeed_passthrough(dev)) {
+                if (0 /*false*/ && dev->highspeed_enabled == 1) {
                     // Transmit all pending bytes immediately
                     int count = fifo_get_count(dev->xmit_fifo);
                     while (count-- > 0) {
@@ -584,7 +584,7 @@ serial_write(uint16_t addr, uint8_t val, void *priv)
                 dev->thr       = val;
                 dev->thr_empty = 0;
 
-                if (false && is_highspeed_passthrough(dev)) {
+                if (0 /*false*/ && dev->highspeed_enabled == 1) {
                     serial_transmit(dev, val);
                 } else {
                     timer_on_auto(&dev->transmit_timer, dev->transmit_period);
