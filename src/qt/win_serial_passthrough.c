@@ -111,6 +111,7 @@ plat_serpt_write_vcon(serial_passthrough_t *dev, uint8_t data)
             dev->ov_write_pending = TRUE;
         } else {
             // TODO: JBO: plat_serpt_write_vcon: Async write failed
+            fatal("Async write to named pipe failed: %08X", err);
         }
     }
 }
@@ -242,7 +243,7 @@ open_pseudo_terminal(serial_passthrough_t *dev)
     //dev->master_fd = (intptr_t) CreateFileA("\\\\.\\pipe\\xtide", GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
     //dev->master_fd = (intptr_t) CreateFileA("\\\\.\\pipe\\xtide", GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_FLAG_WRITE_THROUGH, NULL);
 
-    dev->master_fd = (intptr_t) CreateFileA("\\\\.\\pipe\\xtide", 
+    dev->master_fd = (intptr_t) CreateFileA(ascii_pipe_name  /*"\\\\.\\pipe\\xtide"*/, 
         GENERIC_READ | GENERIC_WRITE, 
         0, 
         NULL, 
@@ -254,8 +255,8 @@ open_pseudo_terminal(serial_passthrough_t *dev)
         wchar_t errorMsg[1024] = { 0 };
         wchar_t finalMsg[1024] = { 0 };
         DWORD   error          = GetLastError();
-        FormatMessageW(FORMAT_MESSAGE_FROM_SYSTEM, NULL, error, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), errorMsg, 1024, NULL);
-        swprintf(finalMsg, 1024, L"Named Pipe (server, named_pipe=\"%hs\", port=COM%d): %ls\n", ascii_pipe_name, dev->port + 1, errorMsg);
+        FormatMessageW(FORMAT_MESSAGE_FROM_SYSTEM, NULL, error, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), errorMsg, sizeof(errorMsg) /*1024*/, NULL);
+        swprintf(finalMsg, sizeof(finalMsg) /*1024*/, L"Named Pipe (server, named_pipe=\"%hs\", port=COM%d): %ls\n", ascii_pipe_name, dev->port + 1, errorMsg);
         ui_msgbox(MBX_ERROR | MBX_FATAL, finalMsg);
         return 0;
     }
