@@ -33,6 +33,7 @@
 #include <86box/plat_serial_passthrough.h>
 #include <86box/ui.h>
 
+#include "win/win_error_message.h"
 #include <windows.h>
 
 #define LOG_PREFIX "serial_passthrough: "
@@ -55,32 +56,32 @@ plat_serpt_close(void *priv)
     CloseHandle((HANDLE) dev->master_fd);
 }
 
-//static void
-//plat_serpt_write_vcon(serial_passthrough_t *dev, uint8_t data)
+// static void
+// plat_serpt_write_vcon(serial_passthrough_t *dev, uint8_t data)
 //{
-//#if 0
-//    fd_set wrfds;
-//    int res;
-//#endif
+// #if 0
+//     fd_set wrfds;
+//     int res;
+// #endif
 //
-//    /* We cannot use select here, this would block the hypervisor! */
-//#if 0
-//    FD_ZERO(&wrfds);
-//    FD_SET(ctx->master_fd, &wrfds);
+//     /* We cannot use select here, this would block the hypervisor! */
+// #if 0
+//     FD_ZERO(&wrfds);
+//     FD_SET(ctx->master_fd, &wrfds);
 //
-//    res = select(ctx->master_fd + 1, NULL, &wrfds, NULL, NULL);
+//     res = select(ctx->master_fd + 1, NULL, &wrfds, NULL, NULL);
 //
-//    if (res <= 0)
-//        return;
-//#endif
+//     if (res <= 0)
+//         return;
+// #endif
 //
-//    /* just write it out */
-//#if 0
-//    fwrite(dev->master_fd, &data, 1);
-//#endif
-//    DWORD bytesWritten = 0;
-//    WriteFile((HANDLE) dev->master_fd, &data, 1, &bytesWritten, NULL);
-//}
+//     /* just write it out */
+// #if 0
+//     fwrite(dev->master_fd, &data, 1);
+// #endif
+//     DWORD bytesWritten = 0;
+//     WriteFile((HANDLE) dev->master_fd, &data, 1, &bytesWritten, NULL);
+// }
 
 void
 plat_serpt_write_vcon(serial_passthrough_t *dev, uint8_t data)
@@ -115,7 +116,6 @@ plat_serpt_write_vcon(serial_passthrough_t *dev, uint8_t data)
         }
     }
 }
-
 
 void
 plat_serpt_set_params(void *priv)
@@ -177,13 +177,13 @@ plat_serpt_write(void *priv, uint8_t data)
     }
 }
 
-//uint8_t
-//plat_serpt_read_vcon(serial_passthrough_t *dev, uint8_t *data)
+// uint8_t
+// plat_serpt_read_vcon(serial_passthrough_t *dev, uint8_t *data)
 //{
-//    DWORD bytesRead = 0;
-//    ReadFile((HANDLE) dev->master_fd, data, 1, &bytesRead, NULL);
-//    return !!bytesRead;
-//}
+//     DWORD bytesRead = 0;
+//     ReadFile((HANDLE) dev->master_fd, data, 1, &bytesRead, NULL);
+//     return !!bytesRead;
+// }
 
 uint8_t
 plat_serpt_read_vcon(serial_passthrough_t *dev, uint8_t *data)
@@ -204,14 +204,13 @@ plat_serpt_read_vcon(serial_passthrough_t *dev, uint8_t *data)
 
     // Poll for completion
     if (GetOverlappedResult((HANDLE) dev->master_fd, &dev->ov_read, &bytesRead, FALSE)) {
-        *data           = dev->ov_read_buffer[0];
+        *data                = dev->ov_read_buffer[0];
         dev->ov_read_pending = FALSE;
         return 1;
     }
 
     return 0; // Not ready yet
 }
-
 
 int
 plat_serpt_read(void *priv, uint8_t *data)
@@ -236,30 +235,56 @@ open_pseudo_terminal(serial_passthrough_t *dev)
     char ascii_pipe_name[1024] = { 0 };
     strncpy(ascii_pipe_name, dev->named_pipe, sizeof(ascii_pipe_name));
     ascii_pipe_name[1023] = '\0';
-    
-    
-    //dev->master_fd        = (intptr_t) CreateNamedPipeA(ascii_pipe_name, PIPE_ACCESS_DUPLEX, PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_NOWAIT, 2, 65536, 65536, NMPWAIT_USE_DEFAULT_WAIT, NULL);
 
-    //dev->master_fd = (intptr_t) CreateFileA("\\\\.\\pipe\\xtide", GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-    //dev->master_fd = (intptr_t) CreateFileA("\\\\.\\pipe\\xtide", GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_FLAG_WRITE_THROUGH, NULL);
+    // dev->master_fd        = (intptr_t) CreateNamedPipeA(ascii_pipe_name, PIPE_ACCESS_DUPLEX, PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_NOWAIT, 2, 65536, 65536, NMPWAIT_USE_DEFAULT_WAIT, NULL);
 
-    dev->master_fd = (intptr_t) CreateFileA(ascii_pipe_name  /*"\\\\.\\pipe\\xtide"*/, 
-        GENERIC_READ | GENERIC_WRITE, 
-        0, 
-        NULL, 
-        OPEN_EXISTING, 
-        FILE_ATTRIBUTE_NORMAL  | FILE_FLAG_OVERLAPPED, 
-        NULL);
+    // dev->master_fd = (intptr_t) CreateFileA("\\\\.\\pipe\\xtide", GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    // dev->master_fd = (intptr_t) CreateFileA("\\\\.\\pipe\\xtide", GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_FLAG_WRITE_THROUGH, NULL);
+
+    dev->master_fd = (intptr_t) CreateFileA(ascii_pipe_name /*"\\\\.\\pipe\\xtide"*/,
+                                            GENERIC_READ | GENERIC_WRITE,
+                                            0,
+                                            NULL,
+                                            OPEN_EXISTING,
+                                            FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED,
+                                            NULL);
+
+    //if (dev->master_fd == (intptr_t) INVALID_HANDLE_VALUE) {
+    //    char szMsg[256] = { 0 };
+    //    snprintf(szMsg, sizeof(szMsg), "Named Pipe (server, named_pipe=\"%s\", port=COM%d):", ascii_pipe_name, dev->port + 1);
+    //
+    //    char    *pszErrMsg      = append_system_error_message_a(szMsg, GetLastError());
+    //    wchar_t *pwszErrMsgWide = to_wide_string(pszErrMsg);
+    //
+    //    ui_msgbox(MBX_ERROR | MBX_FATAL, pwszErrMsgWide);
+    //
+    //    LocalFree(pszErrMsg);
+    //    pszErrMsg = NULL;
+    //
+    //    LocalFree(pwszErrMsgWide);
+    //    pwszErrMsgWide = NULL;
+    //
+    //    return 0;
+    //}
 
     if (dev->master_fd == (intptr_t) INVALID_HANDLE_VALUE) {
-        wchar_t errorMsg[1024] = { 0 };
-        wchar_t finalMsg[1024] = { 0 };
-        DWORD   error          = GetLastError();
-        FormatMessageW(FORMAT_MESSAGE_FROM_SYSTEM, NULL, error, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), errorMsg, sizeof(errorMsg) /*1024*/, NULL);
-        swprintf(finalMsg, sizeof(finalMsg) /*1024*/, L"Named Pipe (server, named_pipe=\"%hs\", port=COM%d): %ls\n", ascii_pipe_name, dev->port + 1, errorMsg);
-        ui_msgbox(MBX_ERROR | MBX_FATAL, finalMsg);
+        wchar_t wszMsg[256] = { 0 };
+        swprintf(wszMsg, sizeof(wszMsg) / sizeof(wchar_t), L"Named Pipe (client, named_pipe=\"%hs\", port=COM%d):", ascii_pipe_name, dev->port + 1);
+
+        wchar_t *pwszErrMsg = append_system_error_message_w(wszMsg, GetLastError());
+        if (pwszErrMsg == NULL) {
+            fatal("Named Pipe creation failed (named_pipe=\"%s\", port=COM%d), system error message could not be retrieved.", dev->named_pipe, dev->port + 1);
+            return 0;
+        }
+
+        ui_msgbox(MBX_ERROR | MBX_FATAL, pwszErrMsg);
+        
+        LocalFree(pwszErrMsg);
+        pwszErrMsg = NULL;
+
         return 0;
     }
+
     pclog("Named Pipe @ %s\n", ascii_pipe_name);
     return 1;
 }
@@ -300,13 +325,12 @@ plat_serpt_open_device(void *priv)
 
     switch (dev->mode) {
         case SERPT_MODE_VCON:
-            if (open_pseudo_terminal(dev)) 
-            {
+            if (open_pseudo_terminal(dev)) {
 
-                //dev->ov_event = CreateEvent(NULL, TRUE, FALSE, NULL);
-                //memset(&dev->ov, 0, sizeof(dev->ov));
-                //dev->ov.hEvent  = dev->ov_event;
-                //dev->ov_pending = FALSE;
+                // dev->ov_event = CreateEvent(NULL, TRUE, FALSE, NULL);
+                // memset(&dev->ov, 0, sizeof(dev->ov));
+                // dev->ov.hEvent  = dev->ov_event;
+                // dev->ov_pending = FALSE;
 
                 dev->ov_read_event = CreateEvent(NULL, TRUE, FALSE, NULL);
                 memset(&dev->ov_read, 0, sizeof(dev->ov_read));
@@ -317,7 +341,6 @@ plat_serpt_open_device(void *priv)
                 memset(&dev->ov_write, 0, sizeof(dev->ov_write));
                 dev->ov_write.hEvent  = dev->ov_write_event;
                 dev->ov_write_pending = FALSE;
-
 
                 return 0;
             }
