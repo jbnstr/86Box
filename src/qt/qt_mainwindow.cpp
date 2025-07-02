@@ -1547,6 +1547,38 @@ MainWindow::showMessage_(int flags, const QString &header, const QString &messag
         QApplication::exit(-1);
 }
 
+/**
+ * @brief Displays a modal question message box and waits for the user's response.
+ * This method is thread-safe.
+ *
+ * @param title The title of the message box.
+ * @param message The message to display.
+ * @return True if the user clicked Yes, false otherwise.
+ */
+bool
+MainWindow::showQuestion(const QString &title, const QString &message)
+{
+    bool result = false;
+    if (QThread::currentThread() == this->thread()) {
+        // We are in the GUI thread, call the slot directly
+        showQuestion_(title, message, &result);
+    } else {
+        // We are in a different thread, emit the signal and wait for the slot to complete
+        emit showQuestionForNonQtThread(title, message, &result);
+    }
+    return result;
+}
+
+/**
+ * @brief Creates and shows the QMessageBox. This slot is always executed in the main GUI thread.
+ */
+void
+MainWindow::showQuestion_(const QString &title, const QString &message, bool *result)
+{
+    QMessageBox questionBox(QMessageBox::Icon::Question, title, message, QMessageBox::Yes | QMessageBox::No, this);
+    *result = (questionBox.exec() == QMessageBox::Yes);
+}
+
 void
 MainWindow::keyPressEvent(QKeyEvent *event)
 {
