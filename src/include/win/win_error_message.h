@@ -24,13 +24,13 @@
     do {                                                                                                                          \
         char szSysErrMsg[512] = { 0 };                                                                                            \
         char szFinalMsg[1024] = { 0 };                                                                                            \
-        int  result           = get_system_error_message_a_2(szSysErrMsg, sizeof(szSysErrMsg) / sizeof(szSysErrMsg[0]), dwError); \
-        if (result > 0) {                                                                                                         \
+        int  lenSysErrMsg     = get_system_error_message_a_2(szSysErrMsg, sizeof(szSysErrMsg) / sizeof(szSysErrMsg[0]), dwError); \
+        if (lenSysErrMsg > 0) {                                                                                                   \
             trim_newline_a(szSysErrMsg);                                                                                          \
         }                                                                                                                         \
         snprintf(szFinalMsg, sizeof(szFinalMsg) / sizeof(szFinalMsg[0]), "%s(%d): '%s' failed: %s", __FILE__, __LINE__,           \
                  ANSI_NAME_OF(api_call),                                                                                          \
-                 result > 0 ? szSysErrMsg : "System error message could not be retrieved.");                                      \
+                 lenSysErrMsg > 0 ? szSysErrMsg : "System error message could not be retrieved.");                                \
         fatal(szFinalMsg);                                                                                                        \
     } while (0)
 
@@ -40,9 +40,9 @@ extern "C" {
 
 extern size_t get_system_error_message_a_2(char *const pszBuffer, size_t const bufferSizeInChars, DWORD const errorCode);
 
-extern char  *get_system_error_message_a(DWORD const errorCode);
-extern char  *append_system_error_message_a(char const *const pszMessage, DWORD const errorCode);
-extern char  *trim_newline_a(char *const pszStr);
+extern char *get_system_error_message_a(DWORD const errorCode);
+extern char *append_system_error_message_a(char const *const pszMessage, DWORD const errorCode);
+extern char *trim_newline_a(char *const pszStr);
 
 extern wchar_t *to_wide_string(char const *const pszSource);
 extern wchar_t *get_system_error_message_w(DWORD const errorCode);

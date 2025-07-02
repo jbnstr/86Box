@@ -4,33 +4,10 @@
 #include <sstream>
 #include <string>
 #include <memory>
-// #include <iomanip> // for std::hex, std::uppercase, etc.
 
 #include "win\win_error_message.h"
 #include "win\Debugger.h"
 #include "86Box\86box.h"
-
-//#define STRINGIFY_A(identifier) #identifier
-//// ANSI name of identifier.
-//#define ANSI_NAME_OF(identifier) STRINGIFY_A(identifier)
-//// To ANSI string.
-//#define TO_ANSI_STRING(identifier) STRINGIFY_A(identifier)
-
-
-
-//#define HANDLE_FATAL_ERROR(func)                                                           \
-//    do {                                                                                   \
-//        char szMsg[256] = { 0 };                                                           \
-//        snprintf(szMsg, sizeof(szMsg), "%s(%d): '%s' failed.", __FILE__, __LINE__, #func); \
-//        char *pszErrMsg = append_system_error_message_a(szMsg, ::GetLastError());          \
-//        if (pszErrMsg != NULL) {                                                           \
-//            fatal(pszErrMsg);                                                              \
-//            ::LocalFree(pszErrMsg);                                                        \
-//        } else {                                                                           \
-//            fatal(szMsg);                                                                  \
-//        }                                                                                  \
-//    } while (0)
-
 
 namespace Diagnostics {
 struct ProcessInfo : public PROCESS_INFORMATION {
@@ -53,17 +30,7 @@ Debugger::Launch()
     UINT         nChars = ::GetSystemDirectoryW(&systemDir[0], static_cast<UINT>(systemDir.length()));
 
     if (nChars == 0) {
-        HANDLE_WINAPI_ERROR(::GetSystemDirectoryW);
-
-        //char szMsg[256] = { 0 };
-        //snprintf(szMsg, sizeof(szMsg), "%s(%d): '%s' failed.", __FILE__, __LINE__, ANSI_NAME_OF(::GetSystemDirectoryW));
-        //char *pszErrMsg = append_system_error_message_a(szMsg, ::GetLastError());
-        //if (pszErrMsg != NULL) {
-        //    fatal(pszErrMsg);
-        //    ::LocalFree(pszErrMsg);
-        //} else {
-        //    fatal(szMsg);
-        //}
+        HANDLE_WINAPI_ERROR_2(::GetSystemDirectoryW, GetLastError());
     }
 
     systemDir.resize(nChars);

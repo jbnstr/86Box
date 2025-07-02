@@ -111,8 +111,7 @@ plat_serpt_write_vcon(serial_passthrough_t *dev, uint8_t data)
         if (err == ERROR_IO_PENDING) {
             dev->ov_write_pending = TRUE;
         } else {
-            // TODO: JBO: plat_serpt_write_vcon: Async write failed
-            fatal("Async write to named pipe failed: %08X", err);
+            HANDLE_WINAPI_ERROR_2(WriteFile, err);
         }
     }
 }
@@ -238,10 +237,7 @@ open_pseudo_terminal(serial_passthrough_t *dev)
 
     // dev->master_fd        = (intptr_t) CreateNamedPipeA(ascii_pipe_name, PIPE_ACCESS_DUPLEX, PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_NOWAIT, 2, 65536, 65536, NMPWAIT_USE_DEFAULT_WAIT, NULL);
 
-    // dev->master_fd = (intptr_t) CreateFileA("\\\\.\\pipe\\xtide", GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-    // dev->master_fd = (intptr_t) CreateFileA("\\\\.\\pipe\\xtide", GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_FLAG_WRITE_THROUGH, NULL);
-
-    dev->master_fd = (intptr_t) CreateFileA(ascii_pipe_name /*"\\\\.\\pipe\\xtide"*/,
+    dev->master_fd = (intptr_t) CreateFileA(ascii_pipe_name,
                                             GENERIC_READ | GENERIC_WRITE,
                                             0,
                                             NULL,
@@ -249,25 +245,11 @@ open_pseudo_terminal(serial_passthrough_t *dev)
                                             FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED,
                                             NULL);
 
-    //if (dev->master_fd == (intptr_t) INVALID_HANDLE_VALUE) {
-    //    char szMsg[256] = { 0 };
-    //    snprintf(szMsg, sizeof(szMsg), "Named Pipe (server, named_pipe=\"%s\", port=COM%d):", ascii_pipe_name, dev->port + 1);
-    //
-    //    char    *pszErrMsg      = append_system_error_message_a(szMsg, GetLastError());
-    //    wchar_t *pwszErrMsgWide = to_wide_string(pszErrMsg);
-    //
-    //    ui_msgbox(MBX_ERROR | MBX_FATAL, pwszErrMsgWide);
-    //
-    //    LocalFree(pszErrMsg);
-    //    pszErrMsg = NULL;
-    //
-    //    LocalFree(pwszErrMsgWide);
-    //    pwszErrMsgWide = NULL;
-    //
-    //    return 0;
-    //}
-
     if (dev->master_fd == (intptr_t) INVALID_HANDLE_VALUE) {
+
+        HANDLE_WINAPI_ERROR_2(CreateFileA, GetLastError());
+
+
         wchar_t wszMsg[256] = { 0 };
         swprintf(wszMsg, sizeof(wszMsg) / sizeof(wchar_t), L"Named Pipe (client, named_pipe=\"%hs\", port=COM%d):", ascii_pipe_name, dev->port + 1);
 

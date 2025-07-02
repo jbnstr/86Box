@@ -88,7 +88,10 @@ get_system_error_message_a_2(char *const pszBuffer, size_t const bufferSizeInCha
 
     if (pszBuffer == NULL || bufferSizeInChars == 0 || bufferSizeInChars > INT_MAX)
         return charsWritten;
-
+    //
+    // Returns number of chars stored in the output buffer, excluding the 
+    // terminating null character (or 0 on failure).
+    //
     charsWritten = (size_t) FormatMessageA(
         FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
         NULL,
