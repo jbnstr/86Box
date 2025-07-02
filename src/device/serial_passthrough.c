@@ -60,7 +60,7 @@ serial_passthrough_init(void)
         if (serial_passthrough_enabled[c]) {
             /* Instance n for COM n */
             serial_passthrough_t *dev = (serial_passthrough_t *)device_add_inst(&serial_passthrough_device, c + 1);
-            if (dev->highspeed_mode) {
+            if (dev && dev->highspeed_mode) {
                 serial_enable_highspeed_mode(dev->serial);
             }
         }
