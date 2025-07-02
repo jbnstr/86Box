@@ -21,7 +21,7 @@ to_wide_string(char const *const pszSource)
     return pwszResult;
 }
 
-static char *
+char *
 trim_newline_a(char *const pszStr)
 {
     if (pszStr == NULL)
@@ -79,6 +79,36 @@ get_system_error_message_a(DWORD const errorCode)
     }
 
     return pszResult;
+}
+
+size_t
+get_system_error_message_a_2(char *const pszBuffer, size_t const bufferSizeInChars, DWORD const errorCode)
+{
+    size_t charsWritten = 0;
+
+    if (pszBuffer == NULL || bufferSizeInChars == 0 || bufferSizeInChars > INT_MAX)
+        return charsWritten;
+
+    charsWritten = (size_t) FormatMessageA(
+        FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+        NULL,
+        errorCode,
+        MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+        pszBuffer,
+        (DWORD) bufferSizeInChars,
+        NULL);
+
+    if (charsWritten > 0)
+        return charsWritten;
+
+    DWORD lastErr = GetLastError();
+    if (lastErr == ERROR_MR_MID_NOT_FOUND) {
+        snprintf(pszBuffer, bufferSizeInChars, "Unknown system error (0x%08X)", errorCode);
+        pszBuffer[bufferSizeInChars - 1] = '\0';
+        charsWritten                     = strlen(pszBuffer);
+    }
+
+    return charsWritten;
 }
 
 wchar_t *
