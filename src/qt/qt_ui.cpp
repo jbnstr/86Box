@@ -207,24 +207,17 @@ ui_msgbox(int flags, void *message)
 }
 
 int
-ui_msgbox_yesno(int flags, void *title, void *text)
+ui_msgbox_yesno(int flags, void *title, void *message)
 {
     const auto qtitle   = (flags & MBX_ANSI) ? QString(static_cast<char *>(title)) : QString::fromWCharArray(static_cast<const wchar_t *>(title));
-    const auto qmessage = (flags & MBX_ANSI) ? QString(static_cast<char *>(text)) : QString::fromWCharArray(static_cast<const wchar_t *>(text));
-    // QMessageBox::Icon::Question
-
-    //QMessageBox questionbox(QMessageBox::Icon::Question, qtitle, qmessage, QMessageBox::Yes | QMessageBox::No, this);
+    const auto qmessage = (flags & MBX_ANSI) ? QString(static_cast<char *>(message)) : QString::fromWCharArray(static_cast<const wchar_t *>(message));
     
     bool result = false;
-    // any error in early init
+
     if (main_window == nullptr) {
-
-        pclog("JBO: ui_msgbox_yesno: under construction, no main window yet");
-        //QMessageBox msgBox(msgicon, hdr, msg);
-        //msgBox.exec();
-
+        QMessageBox questionBox(QMessageBox::Icon::Question, qtitle, qmessage, QMessageBox::Yes | QMessageBox::No);
+        result = (questionBox.exec() == QMessageBox::Yes);
     } else {
-        // else scope it to main_window
         result = main_window->showQuestion(qtitle, qmessage);
     }
     return result ? 1 : 0;

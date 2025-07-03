@@ -280,6 +280,7 @@ MainWindow::MainWindow(QWidget *parent)
     });
 
     connect(this, &MainWindow::showMessageForNonQtThread, this, &MainWindow::showMessage_, Qt::QueuedConnection);
+    connect(this, &MainWindow::showQuestionForNonQtThread, this, &MainWindow::showQuestion_, Qt::BlockingQueuedConnection);
 
     connect(this, &MainWindow::setTitle, this, [this, toolbar_label](const QString &title) {
         if (dopause && !hide_tool_bar) {

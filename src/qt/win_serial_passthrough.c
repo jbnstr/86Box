@@ -256,9 +256,7 @@ open_pseudo_terminal(serial_passthrough_t *dev)
             break;
         }
 
-        //do_pause(2);
-        result = ui_msgbox_yesno(MBX_ANSI, "Some title", szMsg);
-        //do_pause(2);
+        result = ui_msgbox_yesno(MBX_ANSI, "86Box", szMsg);
 
     } while (result != 0);
 
