@@ -57,7 +57,7 @@ plat_serpt_read(void *priv, uint8_t *data)
     fd_set                rdfds;
 
     switch (dev->mode) {
-        case SERPT_MODE_VCON:
+        case SERPT_MODE_VCONSRV:
         case SERPT_MODE_HOSTSER:
             FD_ZERO(&rdfds);
             FD_SET(dev->master_fd, &rdfds);
@@ -200,7 +200,7 @@ plat_serpt_write(void *priv, uint8_t data)
     serial_passthrough_t *dev = (serial_passthrough_t *) priv;
 
     switch (dev->mode) {
-        case SERPT_MODE_VCON:
+        case SERPT_MODE_VCONSRV:
         case SERPT_MODE_HOSTSER:
             plat_serpt_write_vcon(dev, data);
             break;
@@ -309,7 +309,7 @@ plat_serpt_open_device(void *priv)
     serial_passthrough_t *dev = (serial_passthrough_t *) priv;
 
     switch (dev->mode) {
-        case SERPT_MODE_VCON:
+        case SERPT_MODE_VCONSRV:
             if (!open_pseudo_terminal(dev)) {
                 return 1;
             }

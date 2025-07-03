@@ -51,15 +51,13 @@ serial_passthrough_log(const char *fmt, ...)
 #    define serial_passthrough_log(fmt, ...)
 #endif
 
-
-
 void
 serial_passthrough_init(void)
 {
     for (uint8_t c = 0; c < (SERIAL_MAX - 1); c++) {
         if (serial_passthrough_enabled[c]) {
             /* Instance n for COM n */
-            serial_passthrough_t *dev = (serial_passthrough_t *)device_add_inst(&serial_passthrough_device, c + 1);
+            serial_passthrough_t *dev = (serial_passthrough_t *) device_add_inst(&serial_passthrough_device, c + 1);
             if (dev && dev->highspeed_mode) {
                 serial_enable_highspeed_mode(dev->serial);
             }
@@ -73,21 +71,21 @@ serial_passthrough_write(UNUSED(serial_t *s), void *priv, uint8_t val)
     plat_serpt_write(priv, val);
 }
 
-//bool
-//is_highspeed_passthrough(const serial_t *dev)
+// bool
+// is_highspeed_passthrough(const serial_t *dev)
 //{
-//    if (!dev || !dev->sd || !dev->sd->priv)
-//        return false;
+//     if (!dev || !dev->sd || !dev->sd->priv)
+//         return false;
 //
-//    // Check if backend is serial passthrough (dev_write function pointer match)
-//    if (dev->sd->dev_write != serial_passthrough_write)
-//        return false;
+//     // Check if backend is serial passthrough (dev_write function pointer match)
+//     if (dev->sd->dev_write != serial_passthrough_write)
+//         return false;
 //
-//    const serial_passthrough_t *pt = (const serial_passthrough_t *) dev->sd->priv;
-//    return pt->highspeed_mode;
+//     const serial_passthrough_t *pt = (const serial_passthrough_t *) dev->sd->priv;
+//     return pt->highspeed_mode;
 //
-//    //return false;
-//}
+//     //return false;
+// }
 
 static void
 host_to_serial_cb(void *priv)
@@ -98,14 +96,14 @@ host_to_serial_cb(void *priv)
 
     if (dev->highspeed_mode /*&& dev->serial->fifo_enabled*/) {
         while (!fifo_get_full(dev->serial->rcvr_fifo) && plat_serpt_read(dev, &byte)) {
-    
-            //serial_passthrough_log("Read from pipe: %02X\n", byte);
+
+            // serial_passthrough_log("Read from pipe: %02X\n", byte);
             serial_write_fifo(dev->serial, byte);
         }
-    
+
         // Re-arm the timer in highspeed mode to poll for new bytes.
         timer_on_auto(&dev->host_to_serial_timer, 100.0); // 0.1 ms
-    
+
         return;
     }
 
@@ -231,7 +229,7 @@ serial_passthrough_dev_init(const device_t *info)
         return NULL;
     }
 
-    //dev->serial->highspeed_enabled = device_get_config_int("highspeed_mode");
+    // dev->serial->highspeed_enabled = device_get_config_int("highspeed_mode");
 
     strncpy(dev->host_serial_path, device_get_config_string("host_serial_path"), 1023);
 #ifdef _WIN32
@@ -263,10 +261,11 @@ serial_passthrough_dev_init(const device_t *info)
 }
 
 const char *serpt_mode_names[SERPT_MODES_MAX] = {
-    [SERPT_MODE_VCON]    = "vcon",
-    [SERPT_MODE_TCPSRV]  = "tcpsrv",
-    [SERPT_MODE_TCPCLNT] = "tcpclnt",
-    [SERPT_MODE_HOSTSER] = "hostser",
+    [SERPT_MODE_VCONSRV]  = "vconsrv",
+    [SERPT_MODE_VCONCLNT] = "vconclnt",
+    [SERPT_MODE_TCPSRV]   = "tcpsrv",
+    [SERPT_MODE_TCPCLNT]  = "tcpclnt",
+    [SERPT_MODE_HOSTSER]  = "hostser",
 };
 
 // clang-format off
@@ -281,12 +280,10 @@ static const device_config_t serial_passthrough_config[] = {
         .spinner        = { 0 },
         .selection      = {
 #ifdef _WIN32
-            { .description = "Named Pipe (Server)",             .value = SERPT_MODE_VCON    },
-#if 0 /* TODO */
-            { .description = "Named Pipe (Client)",             .value = SERPT_MODE_VCON    },
-#endif
+            { .description = "Named Pipe (Server)",             .value = SERPT_MODE_VCONSRV    },
+            { .description = "Named Pipe (Client)",             .value = SERPT_MODE_VCONCLNT   },
 #else /* _WIN32 */
-            { .description = "Pseudo Terminal/Virtual Console", .value = SERPT_MODE_VCON    },
+            { .description = "Pseudo Terminal/Virtual Console", .value = SERPT_MODE_VCONSRV    },
 #endif /* _WIN32 */
 #if 0 /* TODO */
             { .description = "TCP Server",                      .value = SERPT_MODE_TCPSRV  },

@@ -47,7 +47,7 @@ plat_serpt_close(void *priv)
     fclose(dev->master_fd);
 #endif
     FlushFileBuffers((HANDLE) dev->master_fd);
-    if (dev->mode == SERPT_MODE_VCON)
+    if (dev->mode == SERPT_MODE_VCONSRV)
         DisconnectNamedPipe((HANDLE) dev->master_fd);
     if (dev->mode == SERPT_MODE_HOSTSER) {
         SetCommState((HANDLE) dev->master_fd, (DCB *) dev->backend_priv);
@@ -167,7 +167,8 @@ plat_serpt_write(void *priv, uint8_t data)
     serial_passthrough_t *dev = (serial_passthrough_t *) priv;
 
     switch (dev->mode) {
-        case SERPT_MODE_VCON:
+        case SERPT_MODE_VCONSRV:
+        case SERPT_MODE_VCONCLNT:
         case SERPT_MODE_HOSTSER:
             plat_serpt_write_vcon(dev, data);
             break;
@@ -218,7 +219,8 @@ plat_serpt_read(void *priv, uint8_t *data)
     int                   res = 0;
 
     switch (dev->mode) {
-        case SERPT_MODE_VCON:
+        case SERPT_MODE_VCONSRV:
+        case SERPT_MODE_VCONCLNT:
         case SERPT_MODE_HOSTSER:
             res = plat_serpt_read_vcon(dev, data);
             break;
@@ -229,11 +231,42 @@ plat_serpt_read(void *priv, uint8_t *data)
 }
 
 static int
-connect_pipe_server(serial_passthrough_t *dev, char const *const ascii_pipe_name)
+setup_pipe_server(serial_passthrough_t *dev, char const *const ascii_pipe_name)
 {
+    if (dev == NULL)
+        return 0;
+
+    dev->master_fd = (intptr_t) CreateNamedPipeA(ascii_pipe_name,
+                                                 PIPE_ACCESS_DUPLEX,
+                                                 PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_NOWAIT,
+                                                 1,     // Max 1 instance.
+                                                 65536, // Number of bytes reserved for the output buffer.
+                                                 65536, // Number of bytes reserved for the input buffer.
+                                                 NMPWAIT_USE_DEFAULT_WAIT,
+                                                 NULL); // Default security descriptor.
+
+    if (dev->master_fd == (intptr_t) INVALID_HANDLE_VALUE) {
+        wchar_t errorMsg[512]  = { 0 };
+        wchar_t finalMsg[1024] = { 0 };
+        DWORD   error          = GetLastError();
+        FormatMessageW(FORMAT_MESSAGE_FROM_SYSTEM, NULL, error, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), errorMsg, 1024, NULL);
+        swprintf(finalMsg, 1024, L"Named Pipe (server, named_pipe=\"%hs\", port=COM%d): %ls\n", ascii_pipe_name, dev->port + 1, errorMsg);
+        ui_msgbox(MBX_ERROR | MBX_FATAL, finalMsg);
+        return 0;
+    }
+
+    return 1;
+}
+
+static int
+connect_to_pipe_server(serial_passthrough_t *dev, char const *const ascii_pipe_name)
+{
+    if (dev == NULL)
+        return 0;
+
     int  result      = 0;
     char szMsg[1024] = { 0 };
-    
+
     snprintf(szMsg, sizeof(szMsg) / sizeof(szMsg[0]),
              "Server not available (named_pipe=\"%hs\", port=COM%d). Try again? ([No] ends the application.)",
              ascii_pipe_name, dev->port + 1);
@@ -265,63 +298,27 @@ open_pseudo_terminal(serial_passthrough_t *dev)
     strncpy(ascii_pipe_name, dev->named_pipe, sizeof(ascii_pipe_name));
     ascii_pipe_name[1023] = '\0';
 
-    // dev->master_fd        = (intptr_t) CreateNamedPipeA(ascii_pipe_name, PIPE_ACCESS_DUPLEX, PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_NOWAIT, 2, 65536, 65536, NMPWAIT_USE_DEFAULT_WAIT, NULL);
-
-    if (!connect_pipe_server(dev, ascii_pipe_name)) {
-        fatal("Server not available!");
-        return 0;
-    }
-
-    #if 0
-    char szMsg[1024] = { 0 };
-    snprintf(szMsg, sizeof(szMsg) / sizeof(szMsg[0]),
-             "Server not available (named_pipe=\"%hs\", port=COM%d). Try again? ([No] ends the application.)",
-             ascii_pipe_name, dev->port + 1);
-
-    int result = 0;
-    do {
-        dev->master_fd = (intptr_t) CreateFileA(ascii_pipe_name,
-                                                GENERIC_READ | GENERIC_WRITE,
-                                                0,
-                                                NULL,
-                                                OPEN_EXISTING,
-                                                FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED,
-                                                NULL);
-
-        if (dev->master_fd != (intptr_t) INVALID_HANDLE_VALUE) {
+    switch (dev->mode) {
+        case SERPT_MODE_VCONSRV:
+            if (!setup_pipe_server(dev, ascii_pipe_name)) {
+                return 0;
+            }
+            pclog("Named Pipe Server @ %s\n", ascii_pipe_name);
             break;
-        }
 
-        result = ui_msgbox_yesno(MBX_ANSI, "86Box", szMsg);
+        case SERPT_MODE_VCONCLNT:
+            if (!connect_to_pipe_server(dev, ascii_pipe_name)) {
+                fatal("Named pipe server not available (named_pipe=\"%hs\", port=COM%d)", ascii_pipe_name, dev->port + 1);
+                return 0;
+            }
+            pclog("Named Pipe Client @ %s\n", ascii_pipe_name);
+            break;
 
-    } while (result != 0);
-
-    if (dev->master_fd == (intptr_t) INVALID_HANDLE_VALUE) {
-
-        fatal("Server not available!");
-        return 0;
+        default:
+            // Invalid mode ...
+            break;
     }
-    #endif
 
-    // dev->master_fd = (intptr_t) CreateFileA(ascii_pipe_name,
-    //                                         GENERIC_READ | GENERIC_WRITE,
-    //                                         0,
-    //                                         NULL,
-    //                                         OPEN_EXISTING,
-    //                                         FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED,
-    //                                         NULL);
-
-    // if (dev->master_fd == (intptr_t) INVALID_HANDLE_VALUE) {
-    //     wchar_t errorMsg[1024] = { 0 };
-    //     wchar_t finalMsg[1024] = { 0 };
-    //     DWORD   error          = GetLastError();
-    //     FormatMessageW(FORMAT_MESSAGE_FROM_SYSTEM, NULL, error, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), errorMsg, 1024, NULL);
-    //     swprintf(finalMsg, 1024, L"Named Pipe (server, named_pipe=\"%hs\", port=COM%d): %ls\n", ascii_pipe_name, dev->port + 1, errorMsg);
-    //     ui_msgbox(MBX_ERROR | MBX_FATAL, finalMsg);
-    //     return 0;
-    // }
-
-    pclog("Named Pipe @ %s\n", ascii_pipe_name);
     return 1;
 }
 
@@ -360,7 +357,8 @@ plat_serpt_open_device(void *priv)
     serial_passthrough_t *dev = (serial_passthrough_t *) priv;
 
     switch (dev->mode) {
-        case SERPT_MODE_VCON:
+        case SERPT_MODE_VCONSRV:
+        case SERPT_MODE_VCONCLNT:
             if (open_pseudo_terminal(dev)) {
 
                 // dev->ov_event = CreateEvent(NULL, TRUE, FALSE, NULL);

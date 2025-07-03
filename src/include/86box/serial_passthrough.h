@@ -29,10 +29,11 @@
 #include <86box/serial.h>
 
 enum serial_passthrough_mode {
-    SERPT_MODE_VCON,    /*Named Pipe (Server) / Pseudo Terminal/Virtual Console */
-    SERPT_MODE_TCPSRV,  /* TCP Server (TODO) */
-    SERPT_MODE_TCPCLNT, /* TCP Client (TODO) */
-    SERPT_MODE_HOSTSER, /* Host Serial Passthrough */
+    SERPT_MODE_VCONSRV,  /*Named Pipe (Server) / Pseudo Terminal/Virtual Console */
+    SERPT_MODE_VCONCLNT, /*Named Pipe (Client) / Pseudo Terminal/Virtual Console */
+    SERPT_MODE_TCPSRV,   /* TCP Server (TODO) */
+    SERPT_MODE_TCPCLNT,  /* TCP Client (TODO) */
+    SERPT_MODE_HOSTSER,  /* Host Serial Passthrough */
     SERPT_MODES_MAX,
 };
 
@@ -55,7 +56,7 @@ typedef struct serial_passthrough_s {
     char  named_pipe[1024];                    /* (Windows only) Name of the pipe. */
     void *backend_priv;                        /* Private platform backend data */
 
-    bool       highspeed_mode;
+    bool highspeed_mode;
 
     OVERLAPPED ov_read;
     HANDLE     ov_read_event;
@@ -66,13 +67,12 @@ typedef struct serial_passthrough_s {
     HANDLE     ov_write_event;
     BOOL       ov_write_pending;
 
-
 } serial_passthrough_t;
 
 extern bool           serial_passthrough_enabled[SERIAL_MAX - 1];
 extern const device_t serial_passthrough_device;
 
 extern void serial_passthrough_init(void);
-//extern bool is_highspeed_passthrough(const serial_t *);
+// extern bool is_highspeed_passthrough(const serial_t *);
 
 #endif
