@@ -83,8 +83,104 @@ plat_serpt_close(void *priv)
 //     WriteFile((HANDLE) dev->master_fd, &data, 1, &bytesWritten, NULL);
 // }
 
+static bool
+write_queue_is_empty(serial_passthrough_t *dev)
+{
+    return dev->write_head == dev->write_tail;
+}
+
+static bool
+write_queue_is_full(serial_passthrough_t *dev)
+{
+    return ((dev->write_head + 1) % WRITE_QUEUE_SIZE) == dev->write_tail;
+}
+
+static bool
+write_queue_enqueue(serial_passthrough_t *dev, uint8_t byte)
+{
+    if (write_queue_is_full(dev))
+        return false;
+
+    dev->write_queue[dev->write_head] = byte;
+    dev->write_head                   = (dev->write_head + 1) % WRITE_QUEUE_SIZE;
+    return true;
+}
+
+static bool
+write_queue_dequeue(serial_passthrough_t *dev, uint8_t *byte)
+{
+    if (write_queue_is_empty(dev))
+        return false;
+
+    *byte           = dev->write_queue[dev->write_tail];
+    dev->write_tail = (dev->write_tail + 1) % WRITE_QUEUE_SIZE;
+    return true;
+}
+
+static void
+issue_async_write(serial_passthrough_t *dev, uint8_t byte)
+{
+    DWORD bytesWritten;
+
+    ResetEvent(dev->ov_write_event);
+    memset(&dev->ov_write, 0, sizeof(dev->ov_write));
+    dev->ov_write.hEvent = dev->ov_write_event;
+
+    // Async write to named pipe (will complete immediately almost always).
+    if (WriteFile((HANDLE) dev->master_fd, &byte, 1, &bytesWritten, &dev->ov_write)) {
+        // Completed synchronously.
+        dev->ov_write_pending = FALSE;
+    } else {
+        DWORD err = GetLastError();
+        if (err == ERROR_IO_PENDING) {
+            dev->ov_write_pending = TRUE;
+        } else {
+            // handle error here
+            // dev->ov_write_pending = FALSE;
+            HANDLE_WINAPI_ERROR_2(WriteFile, err);
+        }
+    }
+}
+
 void
-plat_serpt_write_vcon(serial_passthrough_t *dev, uint8_t data)
+plat_serpt_write_vcon(serial_passthrough_t *dev, uint8_t byte)
+{
+    DWORD bytesWritten;
+
+    // Check if previous write completed.
+    if (dev->ov_write_pending) {
+        DWORD result = WaitForSingleObject(dev->ov_write_event, 0);
+        if (result == WAIT_OBJECT_0) {
+            // Yes, previous write completed asynchronously.
+            if (GetOverlappedResult((HANDLE) dev->master_fd, &dev->ov_write, &bytesWritten, FALSE)) {
+                dev->ov_write_pending = FALSE;
+
+                // Write next byte from queue, if available.
+                uint8_t next_byte;
+                if (write_queue_dequeue(dev, &next_byte)) {
+                    issue_async_write(dev, next_byte);
+                }
+            } else {
+                // Error from previous write.
+                dev->ov_write_pending = FALSE;
+                HANDLE_WINAPI_ERROR_2(GetOverlappedResult, GetLastError());
+            }
+        }
+    }
+
+    // Still pending? Queue new byte.
+    if (dev->ov_write_pending) {
+        write_queue_enqueue(dev, byte); // May fail if full.
+        // TODO: JBO: handle overflows in write_queue_enqueue() if the queue is too small (under stress).
+        return;
+    }
+
+    // No write in progress, start immediately.
+    issue_async_write(dev, byte);
+}
+
+void
+plat_serpt_write_vcon_org(serial_passthrough_t *dev, uint8_t data)
 {
     DWORD bytesWritten = 0;
 
@@ -361,11 +457,6 @@ plat_serpt_open_device(void *priv)
         case SERPT_MODE_VCONCLNT:
             if (open_pseudo_terminal(dev)) {
 
-                // dev->ov_event = CreateEvent(NULL, TRUE, FALSE, NULL);
-                // memset(&dev->ov, 0, sizeof(dev->ov));
-                // dev->ov.hEvent  = dev->ov_event;
-                // dev->ov_pending = FALSE;
-
                 dev->ov_read_event = CreateEvent(NULL, TRUE, FALSE, NULL);
                 memset(&dev->ov_read, 0, sizeof(dev->ov_read));
                 dev->ov_read.hEvent  = dev->ov_read_event;
@@ -375,6 +466,8 @@ plat_serpt_open_device(void *priv)
                 memset(&dev->ov_write, 0, sizeof(dev->ov_write));
                 dev->ov_write.hEvent  = dev->ov_write_event;
                 dev->ov_write_pending = FALSE;
+
+                dev->write_head = dev->write_tail = 0;
 
                 return 0;
             }

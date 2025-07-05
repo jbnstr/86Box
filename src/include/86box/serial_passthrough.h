@@ -39,6 +39,8 @@ enum serial_passthrough_mode {
 
 extern const char *serpt_mode_names[SERPT_MODES_MAX];
 
+#define WRITE_QUEUE_SIZE 128
+
 typedef struct serial_passthrough_s {
     enum serial_passthrough_mode mode;
     pc_timer_t                   host_to_serial_timer;
@@ -66,6 +68,11 @@ typedef struct serial_passthrough_s {
     OVERLAPPED ov_write;
     HANDLE     ov_write_event;
     BOOL       ov_write_pending;
+
+    // Write queue (ring buffer)
+    uint8_t write_queue[WRITE_QUEUE_SIZE];
+    size_t  write_head;
+    size_t  write_tail;
 
 } serial_passthrough_t;
 
