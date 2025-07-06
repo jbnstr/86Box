@@ -69,11 +69,6 @@ typedef struct serial_passthrough_s {
     HANDLE     ov_write_event;
     BOOL       ov_write_pending;
 
-    // Write queue (ring buffer)
-    uint8_t write_queue[WRITE_QUEUE_SIZE];
-    size_t  write_head;
-    size_t  write_tail;
-
 } serial_passthrough_t;
 
 extern bool           serial_passthrough_enabled[SERIAL_MAX - 1];

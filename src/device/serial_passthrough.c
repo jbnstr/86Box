@@ -256,13 +256,6 @@ serial_passthrough_dev_init(const device_t *info)
     /* 1 start bit + data bits + stop bits (no parity assumed) */
     dev->bits = 1 + device_get_config_int("data_bits") + device_get_config_int("stop_bits");
 
-    //dev->ov_write_event = CreateEvent(NULL, TRUE, FALSE, NULL);
-    //memset(&dev->ov_write, 0, sizeof(dev->ov_write));
-    //dev->ov_write.hEvent  = dev->ov_write_event;
-    //dev->ov_write_pending = FALSE;
-
-    //dev->write_head = dev->write_tail = 0;
-
     /* Return our private data to the I/O layer. */
     return dev;
 }

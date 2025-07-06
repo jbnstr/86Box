@@ -418,15 +418,6 @@ fifo_get_trigger_len(void *priv)
     return fifo->trigger_len;
 }
 
-//void
-//fifo_set_trigger_len(void *priv, int trigger_len)
-//{
-//    fifo_t *fifo = (fifo_t *) priv;
-//
-//    // TODO: JBO: fifo_set_trigger_len: restore trigger len, now always 1
-//    fifo->trigger_len = 1; // trigger_len;
-//}
-
 void
 fifo_set_trigger_len(void *priv, int trigger_len)
 {
