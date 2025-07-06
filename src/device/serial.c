@@ -266,8 +266,8 @@ serial_write_fifo(serial_t *dev, uint8_t dat)
 void
 serial_transmit(serial_t *dev, uint8_t val)
 {
-    if (dev->mctrl & 0x10)
-        write_fifo(dev, val);
+    if (dev->mctrl & 0x10)      // Loopback mode?
+        write_fifo(dev, val);   // Loopback to receiver FIFO.
     else if (dev->sd && dev->sd->dev_write)
         dev->sd->dev_write(dev, dev->sd->priv, val);
 
@@ -526,77 +526,42 @@ serial_write(uint16_t addr, uint8_t val, void *priv)
 
     cycles -= ISA_CYCLES(8);
 
-
-    //if (dev->highspeed_enabled == 1) {
-    //    serial_log("UART: highspeed enabled\n");
-    //}
-
-
     switch (addr & 7) {
         case 0:
             if (dev->lcr & 0x80) {
+                // Register 0 and DLAB = 1 - Divisor Latch Low
                 dev->dlab = (dev->dlab & 0xff00) | val;
                 serial_transmit_period(dev);
                 serial_update_speed(dev);
                 return;
             }
 
-            //if (dev->fifo_enabled && (fifo_get_count(dev->xmit_fifo) < 16)) {
-            //    /* FIFO mode, begin transmitting. */
-            //    timer_on_auto(&dev->transmit_timer, dev->transmit_period);
-            //    dev->transmit_enabled |= 1; /* Start moving. */
-            //    fifo_write_evt(val, dev->xmit_fifo);
-            //} else if (!dev->fifo_enabled) {
-            //    /* Indicate THR is no longer empty. */
-            //    dev->lsr &= 0x9f;
-            //    dev->int_status &= ~SERIAL_INT_TRANSMIT;
-            //    serial_update_ints(dev);
-            //
-            //    /* Non-FIFO mode, begin transmitting. */
-            //    timer_on_auto(&dev->transmit_timer, dev->transmit_period);
-            //    dev->transmit_enabled |= 1; /* Start moving. */
-            //    dev->thr = val;
-            //    dev->thr_empty = 0;
-            //}
-
             if (dev->fifo_enabled && (fifo_get_count(dev->xmit_fifo) < 16)) {
-                /* FIFO mode */
-                fifo_write_evt(val, dev->xmit_fifo);
-
-                if (0 /*false*/ && dev->highspeed_enabled == 1) {
-                    // Transmit all pending bytes immediately
-                    int count = fifo_get_count(dev->xmit_fifo);
-                    while (count-- > 0) {
-                        uint8_t tx_val = fifo_read(dev->xmit_fifo);
-                        serial_transmit(dev, tx_val);
-                    }
+                /* FIFO mode, begin transmitting. */
+                if (dev->highspeed_enabled == 1) {
+                    serial_transmit(dev, val);
                 } else {
                     timer_on_auto(&dev->transmit_timer, dev->transmit_period);
-                    dev->transmit_enabled |= 1;
+                    dev->transmit_enabled |= 1; /* Start moving. */
+                    fifo_write_evt(val, dev->xmit_fifo);
                 }
-
             } else if (!dev->fifo_enabled) {
-                /* Non-FIFO mode */
+                /* Indicate THR is no longer empty. */
                 dev->lsr &= 0x9f;
                 dev->int_status &= ~SERIAL_INT_TRANSMIT;
                 serial_update_ints(dev);
 
+                /* Non-FIFO mode, begin transmitting. */
+                timer_on_auto(&dev->transmit_timer, dev->transmit_period);
+                dev->transmit_enabled |= 1; /* Start moving. */
                 dev->thr       = val;
                 dev->thr_empty = 0;
-
-                if (0 /*false*/ && dev->highspeed_enabled == 1) {
-                    serial_transmit(dev, val);
-                } else {
-                    timer_on_auto(&dev->transmit_timer, dev->transmit_period);
-                    dev->transmit_enabled |= 1;
-                }
             }
-
-
 
             break;
         case 1:
-            if (dev->lcr & 0x80) {
+            if (dev->lcr & 0x80) { 
+                // Register 1 and DLAB = 1 - Divisor Latch High
                 dev->dlab = (dev->dlab & 0x00ff) | (val << 8);
                 serial_transmit_period(dev);
                 serial_update_speed(dev);
@@ -611,7 +576,8 @@ serial_write(uint16_t addr, uint8_t val, void *priv)
             if (dev->type >= SERIAL_16550) {
 
                 /*
-                FIFO Control Register
+                Register 2 and DLAB x - FIFO Control Register
+                
                 Bit  Meaning                        Action
                 ---  -----------------------------  ---------------------------------------------------------
                 0    FIFO Enable                    We override this in highspeed mode -> do not disable FIFO
@@ -1140,9 +1106,11 @@ serial_enable_highspeed_mode(serial_t *dev)
 
     dev->highspeed_enabled = 1;
     dev->fifo_enabled      = 1;
-
-    timer_disable(&dev->receive_timer); // Do not simulate a baudrate.
-
+    //
+    // Do not simulate a baudrate.
+    //
+    timer_disable(&dev->receive_timer);
+    timer_disable(&dev->transmit_timer);
     //
     // Destroy current receiver FIFO and setup a new XL receiver FIFO.
     //

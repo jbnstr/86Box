@@ -143,7 +143,7 @@ issue_async_write(serial_passthrough_t *dev, uint8_t byte)
 }
 
 void
-plat_serpt_write_vcon(serial_passthrough_t *dev, uint8_t byte)
+plat_serpt_write_vcon_alt(serial_passthrough_t *dev, uint8_t byte)
 {
     DWORD bytesWritten;
 
@@ -177,6 +177,44 @@ plat_serpt_write_vcon(serial_passthrough_t *dev, uint8_t byte)
 
     // No write in progress, start immediately.
     issue_async_write(dev, byte);
+}
+
+void
+plat_serpt_write_vcon(serial_passthrough_t *dev, uint8_t data)
+{
+    // The function will always wait for completion (due to INFINITE timeout), 
+    // making it effectively synchronous. This is the intended behavior, since
+    // the named pipe (dev->master_fd) is created with FILE_FLAG_OVERLAPPED.
+    // This is necessary because plat_serpt_read_vcon needs to be non-blocking.
+
+    // TODO: JBO: FILE_FLAG_OVERLAPPED hoeft alleen voor SERPT_MODE_VCONCLNT !!  plat_serpt_write redirecten naar client mode versie van plat_serpt_write_vcon
+
+    // Reset the event and overlapped structure.
+    ResetEvent(dev->ov_write_event);
+    memset(&dev->ov_write, 0, sizeof(dev->ov_write));
+    dev->ov_write.hEvent = dev->ov_write_event;
+
+    // Attempt async write.
+    if (!WriteFile((HANDLE) dev->master_fd, &data, 1, NULL, &dev->ov_write)) {
+        DWORD err = GetLastError();
+        if (err != ERROR_IO_PENDING) {
+            HANDLE_WINAPI_ERROR_2(WriteFile, err);
+            return;
+        }
+
+        // Wait for completion.
+        if (WaitForSingleObject(dev->ov_write_event, INFINITE) != WAIT_OBJECT_0) {
+            HANDLE_WINAPI_ERROR_2(WaitForSingleObject, GetLastError());
+            return;
+        }
+
+        // Verify the operation completed successfully.
+        DWORD bytesWritten;
+        if (!GetOverlappedResult((HANDLE) dev->master_fd, &dev->ov_write, &bytesWritten, FALSE)) {
+            HANDLE_WINAPI_ERROR_2(GetOverlappedResult, GetLastError());
+            return;
+        }
+    }
 }
 
 void
@@ -292,7 +330,8 @@ plat_serpt_read_vcon(serial_passthrough_t *dev, uint8_t *data)
         if (!ReadFile((HANDLE) dev->master_fd, dev->ov_read_buffer, 1, NULL, &dev->ov_read)) {
             DWORD err = GetLastError();
             if (err != ERROR_IO_PENDING) {
-                return 0; // Read failed
+                HANDLE_WINAPI_ERROR_2(ReadFile, err);
+                //return 0; // Read failed
             }
         }
         dev->ov_read_pending = TRUE;
@@ -333,7 +372,7 @@ setup_pipe_server(serial_passthrough_t *dev, char const *const ascii_pipe_name)
         return 0;
 
     dev->master_fd = (intptr_t) CreateNamedPipeA(ascii_pipe_name,
-                                                 PIPE_ACCESS_DUPLEX,
+                                                 PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED,
                                                  PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_NOWAIT,
                                                  1,     // Max 1 instance.
                                                  65536, // Number of bytes reserved for the output buffer.
