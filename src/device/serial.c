@@ -38,8 +38,6 @@
 #include <86box/serial.h>
 #include <86box/mouse.h>
 
-//#include <86box/serial_passthrough.h>
-
 serial_port_t com_ports[SERIAL_MAX];
 
 enum {
@@ -58,10 +56,6 @@ static int             next_inst = 0;
 static serial_device_t serial_devices[SERIAL_MAX];
 
 static void            serial_xmit_d_empty_evt(void *priv);
-
-
-static void serial_rcvr_d_overrun_evt(void *priv);
-static void serial_rcvr_d_ready_evt(void *priv);
 
 #define ENABLE_SERIAL_LOG  1
 #ifdef ENABLE_SERIAL_LOG

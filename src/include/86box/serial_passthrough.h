@@ -39,8 +39,6 @@ enum serial_passthrough_mode {
 
 extern const char *serpt_mode_names[SERPT_MODES_MAX];
 
-#define WRITE_QUEUE_SIZE 128
-
 typedef struct serial_passthrough_s {
     enum serial_passthrough_mode mode;
     pc_timer_t                   host_to_serial_timer;
@@ -75,6 +73,5 @@ extern bool           serial_passthrough_enabled[SERIAL_MAX - 1];
 extern const device_t serial_passthrough_device;
 
 extern void serial_passthrough_init(void);
-// extern bool is_highspeed_passthrough(const serial_t *);
 
 #endif

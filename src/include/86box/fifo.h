@@ -49,9 +49,6 @@ FIFO(16)
 FIFO(64)
 #define fifo64_init() fifo_init(64)
 
-//FIFO(4096)
-//#define fifo4096_init() fifo_init(4096)
-
 FIFO(1024)
 #define fifo1024_init() fifo_init(1024)
 

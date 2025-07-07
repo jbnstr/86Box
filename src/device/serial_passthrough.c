@@ -71,22 +71,6 @@ serial_passthrough_write(UNUSED(serial_t *s), void *priv, uint8_t val)
     plat_serpt_write(priv, val);
 }
 
-// bool
-// is_highspeed_passthrough(const serial_t *dev)
-//{
-//     if (!dev || !dev->sd || !dev->sd->priv)
-//         return false;
-//
-//     // Check if backend is serial passthrough (dev_write function pointer match)
-//     if (dev->sd->dev_write != serial_passthrough_write)
-//         return false;
-//
-//     const serial_passthrough_t *pt = (const serial_passthrough_t *) dev->sd->priv;
-//     return pt->highspeed_mode;
-//
-//     //return false;
-// }
-
 static void
 host_to_serial_cb(void *priv)
 {
@@ -119,7 +103,6 @@ host_to_serial_cb(void *priv)
             goto no_write_to_machine;
         }
     }
-
     if (plat_serpt_read(dev, &byte)) {
 #if 0
         printf("got byte %02X\n", byte);
@@ -133,7 +116,6 @@ no_write_to_machine:
 #if 0
     serial_device_timeout(dev->serial);
 #endif
-
     timer_on_auto(&dev->host_to_serial_timer, (1000000.0 / dev->baudrate) * (double) dev->bits);
 }
 
@@ -228,8 +210,6 @@ serial_passthrough_dev_init(const device_t *info)
         free(dev);
         return NULL;
     }
-
-    // dev->serial->highspeed_enabled = device_get_config_int("highspeed_mode");
 
     strncpy(dev->host_serial_path, device_get_config_string("host_serial_path"), 1023);
 #ifdef _WIN32
