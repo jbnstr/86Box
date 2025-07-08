@@ -284,8 +284,8 @@ setup_pipe_server(serial_passthrough_t *dev, char const *const ascii_pipe_name)
         wchar_t errorMsg[512]  = { 0 };
         wchar_t finalMsg[1024] = { 0 };
         DWORD   error          = GetLastError();
-        FormatMessageW(FORMAT_MESSAGE_FROM_SYSTEM, NULL, error, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), errorMsg, 1024, NULL);
-        swprintf(finalMsg, 1024, L"Named Pipe (server, named_pipe=\"%hs\", port=COM%d): %ls\n", ascii_pipe_name, dev->port + 1, errorMsg);
+        FormatMessageW(FORMAT_MESSAGE_FROM_SYSTEM, NULL, error, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), errorMsg, ARRAYSIZE(errorMsg), NULL);
+        swprintf(finalMsg, ARRAYSIZE(finalMsg), L"Named Pipe (server, named_pipe=\"%hs\", port=COM%d): %ls\n", ascii_pipe_name, dev->port + 1, errorMsg);
         ui_msgbox(MBX_ERROR | MBX_FATAL, finalMsg);
         return 0;
     }
@@ -302,7 +302,7 @@ connect_to_pipe_server(serial_passthrough_t *dev, char const *const ascii_pipe_n
     int  result      = 0;
     char szMsg[1024] = { 0 };
 
-    snprintf(szMsg, sizeof(szMsg) / sizeof(szMsg[0]),
+    snprintf(szMsg, ARRAYSIZE(szMsg),
              "Server not available (named_pipe=\"%hs\", port=COM%d). Try again? ([No] ends the application.)",
              ascii_pipe_name, dev->port + 1);
 
