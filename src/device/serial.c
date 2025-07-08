@@ -181,7 +181,7 @@ serial_receive_timer(void *priv)
             /* Clear FIFO timeout. */
             serial_clear_timeout(dev);
 
-            // RSR to FIFO
+            /* RSR to FIFO. */
             fifo_write_evt((uint8_t) (dev->out_new & 0xff), dev->rcvr_fifo);
             dev->out_new = 0xffff;
 
@@ -236,23 +236,24 @@ serial_write_fifo(serial_t *dev, uint8_t dat)
                ((dev->type >= SERIAL_16550) && dev->fifo_enabled) ?
                fifo_get_count(dev->rcvr_fifo) : 0);
 
-    // Skip when loopback.
+    /* Skip when loopback. */
     if (!dev || (dev->mctrl & 0x10))
         return;
 
-    write_fifo(dev, dat); // Sets out_new
+    write_fifo(dev, dat); /* Sets out_new (RSR). */
 
     if (dev->highspeed_enabled) {
-        // Immediately emulate receive completion (normally done in receive_timer)
+        /* Immediately emulate receive completion (normally done in receive_timer) */
 
         /* Clear FIFO timeout. */
         serial_clear_timeout(dev);
 
-        // RSR to FIFO
+        /* RSR to FIFO */
         fifo_write_evt((uint8_t) (dev->out_new & 0xff), dev->rcvr_fifo);
         dev->out_new = 0xffff;
             
-        // Re-arm FIFO timeout.
+        /* Re-arm FIFO timeout. Allows flushing partially filled FIFO when no 
+           new data comes in (i.e. FIFO did not reach trigger level). */
         timer_on_auto(&dev->timeout_timer, 4.0 * dev->bits * dev->transmit_period);
     }
 }
@@ -260,8 +261,8 @@ serial_write_fifo(serial_t *dev, uint8_t dat)
 void
 serial_transmit(serial_t *dev, uint8_t val)
 {
-    if (dev->mctrl & 0x10)      // Loopback mode?
-        write_fifo(dev, val);   // Loopback to receiver FIFO.
+    if (dev->mctrl & 0x10)      /* Loopback? */
+        write_fifo(dev, val);   /* Loopback to receiver FIFO. */
     else if (dev->sd && dev->sd->dev_write)
         dev->sd->dev_write(dev, dev->sd->priv, val);
 
@@ -394,16 +395,22 @@ serial_update_speed(serial_t *dev)
 {
     serial_log("serial_update_speed(%lf)\n", dev->transmit_period);
 
-    if (!dev->highspeed_enabled) {
-        // Do not use a receive timer since we do not want to use artificial 
-        // pacing (timer delay is based on baudrate). We read as many bytes as 
-        // possible in a single call to host_to_serial_cb (serial_passthrough.c)
-        // until the FIFO is full or pipe is empty.
-        timer_on_auto(&dev->receive_timer, /* dev->bits * */ dev->transmit_period);
-    }
+    /*
+    In highspeed mode we don't use the receive and transmit timers. The timers
+    introduce delays based on the baud rate. 
+    
+    When receiving our goal is to read as many bytes as possible in a single 
+    call to host_to_serial_cb (serial_passthrough.c), i.e. until the FIFO is 
+    full or the pipe is empty.
+    */
 
-    if (dev->transmit_enabled & 3)
-        timer_on_auto(&dev->transmit_timer, dev->transmit_period);
+    if (!dev->highspeed_enabled) {
+        
+        timer_on_auto(&dev->receive_timer, /* dev->bits * */ dev->transmit_period);
+
+        if (dev->transmit_enabled & 3)
+            timer_on_auto(&dev->transmit_timer, dev->transmit_period);
+    }
 
     if (timer_is_on(&dev->timeout_timer))
         timer_on_auto(&dev->timeout_timer, 4.0 * dev->bits * dev->transmit_period);
@@ -523,7 +530,7 @@ serial_write(uint16_t addr, uint8_t val, void *priv)
     switch (addr & 7) {
         case 0:
             if (dev->lcr & 0x80) {
-                // Register 0 and DLAB = 1 - Divisor Latch Low
+                /* Offset 0 and DLAB = 1 - Divisor Latch Low */
                 dev->dlab = (dev->dlab & 0xff00) | val;
                 serial_transmit_period(dev);
                 serial_update_speed(dev);
@@ -555,7 +562,7 @@ serial_write(uint16_t addr, uint8_t val, void *priv)
             break;
         case 1:
             if (dev->lcr & 0x80) { 
-                // Register 1 and DLAB = 1 - Divisor Latch High
+                /* Offset 1 and DLAB = 1 - Divisor Latch High */
                 dev->dlab = (dev->dlab & 0x00ff) | (val << 8);
                 serial_transmit_period(dev);
                 serial_update_speed(dev);
@@ -570,32 +577,37 @@ serial_write(uint16_t addr, uint8_t val, void *priv)
             if (dev->type >= SERIAL_16550) {
 
                 /*
-                Register 2 and DLAB x - FIFO Control Register
+                Offset 2 and DLAB x - FIFO Control Register
                 
                 Bit  Meaning                        Action
-                ---  -----------------------------  ---------------------------------------------------------
-                0    FIFO Enable                    We override this in highspeed mode -> do not disable FIFO
-                1    Receiver FIFO Reset            Reset `rcvr_fifo` contents/events
-                2    Transmit FIFO Reset            Reset `xmit_fifo` contents/events
+                ---  -----------------------------  ----------------------------------------------------------
+                0    FIFO Enable                    We override this in highspeed mode -> do not disable FIFO.
+                1    Receiver FIFO Reset            Reset 'rcvr_fifo' contents/events.
+                2    Transmit FIFO Reset            Reset 'xmit_fifo' contents/events.
                 3    Receiver/Transmit ready        Used for DMA (Direct Memory Access) signaling. 
                                                     Not supported. Writting to this bit has no effect.
                 4,5  Reserved
-                6–7  Receiver Trigger Level Select  Set how many bytes in FIFO before raising interrupt
+                6–7  Receiver Trigger Level Select  Set how many bytes in FIFO before raising interrupt.
                 */
 
-                // If FIFO enable bit (bit 0) changes from 0 -> 1, reset FIFOs.
+                /* If FIFO enable bit (bit 0) changes from 0->1, reset FIFOs. */
                 if ((val ^ dev->fcr) & 0x01)
                     serial_reset_fifo(dev);
                 
-                dev->fcr          = val & 0xf9; // Store FCR value, masking out bit 1 (0x02) and bit 2 (0x04).
-                dev->fifo_enabled = val & 0x01; // Enable or disable the FIFO logic.
+                dev->fcr          = val & 0xf9; /* Store FCR value, masking out bit 1 (0x02) and bit 2 (0x04). */
+                dev->fifo_enabled = val & 0x01; /* Enable or disable the FIFO logic. */
                 
-                //
-                // In highspeed mode we ignore (override) disabling of the FIFO by
-                // the guest. The 16550 UART provides a way to detect FIFO presence
-                // via the IIR (Interrupt Identification Register). Therfore we must
-                // track what the guest expects to see when reading IIR.
-                //
+                /*
+                In highspeed mode, any attempt by the guest to disable the FIFO is overridden (ignored). 
+                Nevertheless, the 16550 UART's Interrupt Identification Register (IIR) continues to 
+                report a FIFO status that is consistent with the guest's expectation.
+
+                Note, FCR and IIR share the same I/O port address + offset 2. 
+                Purpose depends on reading or writing:
+                  FCR when writing (what we are doing here)
+                  IIR when reading (serial_read)
+                */
+				
                 //dev->guest_visible_fifo_enabled = dev->fifo_enabled;
                 if (dev->highspeed_enabled && !dev->fifo_enabled) {
                     serial_log("Highspeed mode active - ignoring FIFO disable, preserving large FIFO\n");
@@ -785,15 +797,12 @@ serial_read(uint16_t addr, void *priv)
                 serial_update_ints(dev);
             }
             
-            //if (dev->fcr & 1)
-            //    ret |= 0xc0;
-
-            //
-            // When FIFO is enabled (or when the guest believes FIFO should be 
-            // enabled) report back 0xC0 (bit 6 and 7 are set):
-            //    bit 6 (0x40) FIFO is present and enabled.
-            //    bit 7 (0x80) Sometimes set too, indicates FIFO is functioning properly.
-            //
+            /*
+            When FIFO is enabled (or when the guest believes FIFO should be 
+            enabled) report back 0xC0 (bit 6 and 7 are set):
+               bit 6 (0x40) FIFO is present and enabled.
+               bit 7 (0x80) Sometimes set too, indicates FIFO is functioning properly.
+            */
             if ((dev->fcr & 0x01) /*| dev->guest_visible_fifo_enabled*/)
                 ret |= 0xC0;
             
@@ -1100,14 +1109,14 @@ serial_enable_highspeed_mode(serial_t *dev)
 
     dev->highspeed_enabled = 1;
     dev->fifo_enabled      = 1;
-    //
-    // Do not simulate a baudrate.
-    //
+
+    /* Do not simulate a baudrate. */
+
     timer_disable(&dev->receive_timer);
     timer_disable(&dev->transmit_timer);
-    //
-    // Destroy current receiver FIFO and setup a new XL receiver FIFO.
-    //
+
+    /* Destroy current receiver FIFO and setup a new XL receiver FIFO. */
+	
     fifo_close(dev->rcvr_fifo);
     dev->rcvr_fifo = fifo1024_init();
     fifo_set_priv(dev->rcvr_fifo, dev);

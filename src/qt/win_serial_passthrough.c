@@ -35,8 +35,23 @@
 
 #include "win/win_error_message.h"
 #include <windows.h>
+#include <crtdbg.h> /* for _ASSERT */
 
 #define LOG_PREFIX "serial_passthrough: "
+
+
+typedef struct async_io_s {
+    OVERLAPPED ov_read;
+    HANDLE     ov_read_event;
+    uint8_t    ov_read_buffer[1];
+    BOOL       ov_read_pending;
+    
+    OVERLAPPED ov_write;
+    HANDLE     ov_write_event;
+    BOOL       ov_write_pending;
+} async_io_t;
+
+#define OV(dev) ((async_io_t *) (dev->backend_ov_priv))
 
 void
 plat_serpt_close(void *priv)
@@ -47,11 +62,17 @@ plat_serpt_close(void *priv)
     fclose(dev->master_fd);
 #endif
     FlushFileBuffers((HANDLE) dev->master_fd);
-    if (dev->mode == SERPT_MODE_VCONSRV)
+    if (dev->mode == SERPT_MODE_VCONCLNT) {
+        free(dev->backend_ov_priv);
+        dev->backend_ov_priv = NULL;
+    }
+    if (dev->mode == SERPT_MODE_VCONSRV) {
         DisconnectNamedPipe((HANDLE) dev->master_fd);
+    }
     if (dev->mode == SERPT_MODE_HOSTSER) {
         SetCommState((HANDLE) dev->master_fd, (DCB *) dev->backend_priv);
         free(dev->backend_priv);
+        dev->backend_priv = NULL;
     }
     CloseHandle((HANDLE) dev->master_fd);
 }
@@ -86,34 +107,39 @@ plat_serpt_write_vcon_srvr(serial_passthrough_t *dev, uint8_t data)
 void
 plat_serpt_write_vcon_clnt(serial_passthrough_t *dev, uint8_t data)
 {
-    // The function will always wait for completion (due to INFINITE timeout),
-    // making it effectively synchronous. This is the intended behavior, since
-    // the named pipe (dev->master_fd) is created with FILE_FLAG_OVERLAPPED.
-    // This is necessary because plat_serpt_read_vcon_clnt needs to be 
-    // non-blocking.
+    /*
+    This function will always wait for completion (due to INFINITE timeout),
+    making it effectively synchronous. This is the intended behavior, writing
+    to the named pipe should be able to complete almost immediately. If not we
+    just wait for it. However, if the emulated guest outpaces the pipe, 
+    something’s wrong anyway (e.g., debugger pause in the named pipe server).
+    
+    The named pipe (dev->master_fd) is created with FILE_FLAG_OVERLAPPED when
+    acting as a client. We therefore need to use overlapped I/O when writing.
+    */
 
-    // Reset the event and overlapped structure.
-    ResetEvent(dev->ov_write_event);
-    memset(&dev->ov_write, 0, sizeof(dev->ov_write));
-    dev->ov_write.hEvent = dev->ov_write_event;
+    /* Reset the event and overlapped structure. */
+    ResetEvent(OV(dev)->ov_write_event);
+    memset(&(OV(dev)->ov_write), 0, sizeof(OV(dev)->ov_write));
+    OV(dev)->ov_write.hEvent = OV(dev)->ov_write_event;
 
-    // Attempt async write.
-    if (!WriteFile((HANDLE) dev->master_fd, &data, 1, NULL, &dev->ov_write)) {
+    /* Attempt async write. */
+    if (!WriteFile((HANDLE) dev->master_fd, &data, 1, NULL, &OV(dev)->ov_write)) {
         DWORD err = GetLastError();
         if (err != ERROR_IO_PENDING) {
             HANDLE_WINAPI_ERROR_2(WriteFile, err);
             return;
         }
 
-        // Wait for completion.
-        if (WaitForSingleObject(dev->ov_write_event, INFINITE) != WAIT_OBJECT_0) {
+        /* Wait for completion. */
+        if (WaitForSingleObject(OV(dev)->ov_write_event, INFINITE) != WAIT_OBJECT_0) {
             HANDLE_WINAPI_ERROR_2(WaitForSingleObject, GetLastError());
             return;
         }
 
-        // Verify the operation completed successfully.
+        /* Verify the operation completed successfully. */
         DWORD bytesWritten;
-        if (!GetOverlappedResult((HANDLE) dev->master_fd, &dev->ov_write, &bytesWritten, FALSE)) {
+        if (!GetOverlappedResult((HANDLE) dev->master_fd, &OV(dev)->ov_write, &bytesWritten, FALSE)) {
             HANDLE_WINAPI_ERROR_2(GetOverlappedResult, GetLastError());
             return;
         }
@@ -196,27 +222,27 @@ plat_serpt_read_vcon_clnt(serial_passthrough_t *dev, uint8_t *data)
 {
     DWORD bytesRead = 0;
 
-    // If no read is pending, issue one.
-    if (!dev->ov_read_pending) {
-        ResetEvent(dev->ov_read_event);
-        if (!ReadFile((HANDLE) dev->master_fd, dev->ov_read_buffer, 1, NULL, &dev->ov_read)) {
+    /* If no read is pending, issue one. */
+    if (!OV(dev)->ov_read_pending) {
+        ResetEvent(OV(dev)->ov_read_event);
+        if (!ReadFile((HANDLE) dev->master_fd, OV(dev)->ov_read_buffer, 1, NULL, &OV(dev)->ov_read)) {
             DWORD err = GetLastError();
             if (err == ERROR_IO_PENDING) {
-                dev->ov_read_pending = TRUE;
+                OV(dev)->ov_read_pending = TRUE;
             } else {
                 HANDLE_WINAPI_ERROR_2(ReadFile, err);
             }
         }
     }
 
-    // Poll for completion.
-    if (GetOverlappedResult((HANDLE) dev->master_fd, &dev->ov_read, &bytesRead, FALSE)) {
-        *data                = dev->ov_read_buffer[0];
-        dev->ov_read_pending = FALSE;
+    /* Poll for completion. */
+    if (GetOverlappedResult((HANDLE) dev->master_fd, &OV(dev)->ov_read, &bytesRead, FALSE)) {
+        *data                = OV(dev)->ov_read_buffer[0];
+        OV(dev)->ov_read_pending = FALSE;
         return 1;
     }
 
-    return 0; // Not ready yet.
+    return 0; /* Not ready yet. */
 }
 
 int
@@ -248,11 +274,11 @@ setup_pipe_server(serial_passthrough_t *dev, char const *const ascii_pipe_name)
     dev->master_fd = (intptr_t) CreateNamedPipeA(ascii_pipe_name,
                                                  PIPE_ACCESS_DUPLEX,
                                                  PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_NOWAIT,
-                                                 1,     // Max 1 instance.
-                                                 65536, // Number of bytes reserved for the output buffer.
-                                                 65536, // Number of bytes reserved for the input buffer.
+                                                 1,     /* Max 1 instance. */
+                                                 65536, /* Number of bytes reserved for the output buffer. */
+                                                 65536, /* Number of bytes reserved for the input buffer. */
                                                  NMPWAIT_USE_DEFAULT_WAIT,
-                                                 NULL); // Default security descriptor.
+                                                 NULL); /* Default security descriptor. */
 
     if (dev->master_fd == (intptr_t) INVALID_HANDLE_VALUE) {
         wchar_t errorMsg[512]  = { 0 };
@@ -321,21 +347,29 @@ open_pseudo_terminal(serial_passthrough_t *dev)
                 return 0;
             }
 
-            dev->ov_read_event = CreateEvent(NULL, TRUE, FALSE, NULL);
-            memset(&dev->ov_read, 0, sizeof(dev->ov_read));
-            dev->ov_read.hEvent  = dev->ov_read_event;
-            dev->ov_read_pending = FALSE;
+            async_io_t *async_data = (async_io_t *) malloc(sizeof(async_io_t));
+            if (!async_data)
+                return 0;
 
-            dev->ov_write_event = CreateEvent(NULL, TRUE, FALSE, NULL);
-            memset(&dev->ov_write, 0, sizeof(dev->ov_write));
-            dev->ov_write.hEvent  = dev->ov_write_event;
-            dev->ov_write_pending = FALSE;
+            async_data->ov_read_event = CreateEvent(NULL, TRUE, FALSE, NULL);
+            memset(&async_data->ov_read, 0, sizeof(async_data->ov_read));
+            async_data->ov_read.hEvent  = async_data->ov_read_event;
+            async_data->ov_read_pending = FALSE;
+
+            async_data->ov_write_event = CreateEvent(NULL, TRUE, FALSE, NULL);
+            memset(&async_data->ov_write, 0, sizeof(async_data->ov_write));
+            async_data->ov_write.hEvent  = async_data->ov_write_event;
+            async_data->ov_write_pending = FALSE;
+
+            _ASSERT(dev->backend_ov_priv == NULL);
+            dev->backend_ov_priv = async_data;
 
             pclog("Named Pipe Client @ %s\n", ascii_pipe_name);
             break;
 
         default:
-            // Invalid mode ...
+            /* Invalid mode... */
+            _ASSERT(FALSE)
             break;
     }
 
@@ -380,17 +414,6 @@ plat_serpt_open_device(void *priv)
         case SERPT_MODE_VCONSRV:
         case SERPT_MODE_VCONCLNT:
             if (open_pseudo_terminal(dev)) {
-
-                //dev->ov_read_event = CreateEvent(NULL, TRUE, FALSE, NULL);
-                //memset(&dev->ov_read, 0, sizeof(dev->ov_read));
-                //dev->ov_read.hEvent  = dev->ov_read_event;
-                //dev->ov_read_pending = FALSE;
-
-                //dev->ov_write_event = CreateEvent(NULL, TRUE, FALSE, NULL);
-                //memset(&dev->ov_write, 0, sizeof(dev->ov_write));
-                //dev->ov_write.hEvent  = dev->ov_write_event;
-                //dev->ov_write_pending = FALSE;
-
                 return 0;
             }
             break;

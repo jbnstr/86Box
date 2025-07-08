@@ -21,7 +21,6 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-#include <Windows.h>
 
 #include <86box/86box.h>
 #include <86box/device.h>
@@ -29,8 +28,8 @@
 #include <86box/serial.h>
 
 enum serial_passthrough_mode {
-    SERPT_MODE_VCONSRV,  /*Named Pipe (Server) / Pseudo Terminal/Virtual Console */
-    SERPT_MODE_VCONCLNT, /*Named Pipe (Client) / Pseudo Terminal/Virtual Console */
+    SERPT_MODE_VCONSRV,  /* Named Pipe (Server) / Pseudo Terminal/Virtual Console */
+    SERPT_MODE_VCONCLNT, /* Named Pipe (Client) / Pseudo Terminal/Virtual Console */
     SERPT_MODE_TCPSRV,   /* TCP Server (TODO) */
     SERPT_MODE_TCPCLNT,  /* TCP Client (TODO) */
     SERPT_MODE_HOSTSER,  /* Host Serial Passthrough */
@@ -54,18 +53,12 @@ typedef struct serial_passthrough_s {
                                                 * socket or alike */
     char  host_serial_path[1024];              /* Path to TTY/host serial port on the host */
     char  named_pipe[1024];                    /* (Windows only) Name of the pipe. */
+    void *backend_ov_priv;                     /* Private data used in async (overlapped) 
+                                                  named pipe I/O (Windows only) */
     void *backend_priv;                        /* Private platform backend data */
 
-    bool highspeed_mode;
-
-    OVERLAPPED ov_read;
-    HANDLE     ov_read_event;
-    uint8_t    ov_read_buffer[1];
-    BOOL       ov_read_pending;
-
-    OVERLAPPED ov_write;
-    HANDLE     ov_write_event;
-    BOOL       ov_write_pending;
+    bool highspeed_mode;                       /* High speed comms over named pipe not limited 
+                                                  by an emulated baud rate (Windows only). */
 
 } serial_passthrough_t;
 

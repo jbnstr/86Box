@@ -85,7 +85,7 @@ host_to_serial_cb(void *priv)
             serial_write_fifo(dev->serial, byte);
         }
 
-        // Re-arm the timer in highspeed mode to poll for new bytes.
+        /* Re-arm the timer in highspeed mode to poll for new bytes. */
         timer_on_auto(&dev->host_to_serial_timer, 100.0); // 0.1 ms
 
         return;
