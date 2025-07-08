@@ -369,7 +369,7 @@ open_pseudo_terminal(serial_passthrough_t *dev)
 
         default:
             /* Invalid mode... */
-            _ASSERT(FALSE)
+            _ASSERT(FALSE);
             break;
     }
 
