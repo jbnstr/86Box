@@ -265,6 +265,7 @@ plat_serpt_read(void *priv, uint8_t *data)
     return res;
 }
 
+#if 1
 static int
 setup_pipe_server(serial_passthrough_t *dev, char const *const ascii_pipe_name)
 {
@@ -292,6 +293,43 @@ setup_pipe_server(serial_passthrough_t *dev, char const *const ascii_pipe_name)
 
     return 1;
 }
+#else
+static int
+setup_pipe_server(serial_passthrough_t *dev, char const *const ascii_pipe_name)
+{
+    if (dev == NULL)
+        return 0;
+
+    dev->master_fd = (intptr_t) CreateNamedPipeA(ascii_pipe_name,
+                                                 PIPE_ACCESS_DUPLEX,
+                                                 PIPE_TYPE_BYTE | PIPE_NOWAIT,
+                                                 1,     /* Max 1 instance. */
+                                                 65536, /* Number of bytes reserved for the output buffer. */
+                                                 65536, /* Number of bytes reserved for the input buffer. */
+                                                 NMPWAIT_USE_DEFAULT_WAIT,
+                                                 NULL); /* Default security descriptor. */
+
+    if (dev->master_fd == (intptr_t) INVALID_HANDLE_VALUE) {
+        wchar_t errorMsg[512]  = { 0 };
+        wchar_t finalMsg[1024] = { 0 };
+        DWORD   error          = GetLastError();
+        FormatMessageW(FORMAT_MESSAGE_FROM_SYSTEM, NULL, error, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), errorMsg, ARRAYSIZE(errorMsg), NULL);
+        swprintf(finalMsg, ARRAYSIZE(finalMsg), L"Named Pipe (server, named_pipe=\"%hs\", port=COM%d): %ls\n", ascii_pipe_name, dev->port + 1, errorMsg);
+        ui_msgbox(MBX_ERROR | MBX_FATAL, finalMsg);
+        return 0;
+    }
+
+    DWORD err = 0;
+    do {
+        if (!ConnectNamedPipe((HANDLE) dev->master_fd, NULL)) {
+            err = GetLastError();
+            Sleep(5);
+        }
+    } while (err != ERROR_PIPE_CONNECTED);
+
+    return 1;
+}
+#endif
 
 static int
 connect_to_pipe_server(serial_passthrough_t *dev, char const *const ascii_pipe_name)
