@@ -64,6 +64,7 @@ extern "C" {
 #    include <86box/win.h>
 #    include <shobjidl.h>
 #    include <windows.h>
+#    include "win/Debugger.h"
 #endif
 
 #include <thread>
@@ -524,6 +525,30 @@ main(int argc, char *argv[])
     QApplication app(argc, argv);
     QLocale::setDefault(QLocale::C);
     setlocale(LC_NUMERIC, "C");
+
+#ifdef Q_OS_WINDOWS
+#if defined(_DEBUG) || defined(DEBUG)
+    int dbgbreak_pos = -1;
+
+    for (int c = 1; c < argc; c++) {
+        if (strcasecmp(argv[c], "--dbgbreak") == 0) {
+            dbgbreak_pos = c;
+            break;
+        }
+    }
+
+    if (dbgbreak_pos != -1) {
+        // Remove the --dbgbreak argument by shifting all arguments from 
+        // dbgbreak_pos + 1 to the end left by one position.
+        for (int i = dbgbreak_pos; i < argc - 1; i++) {
+            argv[i] = argv[i + 1];
+        }
+        argc--;
+
+        Diagnostics::Debugger::Launch();
+    }
+#endif
+#endif
 
 #ifdef Q_OS_WINDOWS
     Q_INIT_RESOURCE(darkstyle);
