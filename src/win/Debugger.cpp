@@ -32,7 +32,7 @@ namespace Diagnostics
         UINT         nChars = ::GetSystemDirectoryW(&systemDir[0], static_cast<UINT>(systemDir.length()));
 
         if (nChars == 0) {
-            HANDLE_WINAPI_ERROR_2(::GetSystemDirectoryW, GetLastError());
+            HANDLE_WINAPI_ERROR(::GetSystemDirectoryW, GetLastError());
         }
 
         systemDir.resize(nChars);
@@ -47,7 +47,7 @@ namespace Diagnostics
         STARTUPINFOW si = {};
         ProcessInfo  pi = {};
         if (!::CreateProcessW(NULL, &cmdLine[0], NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi)) {
-            HANDLE_WINAPI_ERROR_2(::CreateProcessW, GetLastError());
+            HANDLE_WINAPI_ERROR(::CreateProcessW, GetLastError());
         }
 
         // Wait for the debugger to attach.

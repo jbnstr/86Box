@@ -130,20 +130,20 @@ plat_serpt_write_vcon_to_server(serial_passthrough_t *dev, uint8_t data)
     if (!WriteFile((HANDLE) dev->master_fd, &data, 1, NULL, &OV(dev)->ov_write)) {
         DWORD err = GetLastError();
         if (err != ERROR_IO_PENDING) {
-            HANDLE_WINAPI_ERROR_2(WriteFile, err);
+            HANDLE_WINAPI_ERROR(WriteFile, err);
             return;
         }
 
         /* Wait for completion. */
         if (WaitForSingleObject(OV(dev)->ov_write_event, INFINITE) != WAIT_OBJECT_0) {
-            HANDLE_WINAPI_ERROR_2(WaitForSingleObject, GetLastError());
+            HANDLE_WINAPI_ERROR(WaitForSingleObject, GetLastError());
             return;
         }
 
         /* Verify the operation completed successfully. */
         DWORD bytesWritten;
         if (!GetOverlappedResult((HANDLE) dev->master_fd, &OV(dev)->ov_write, &bytesWritten, FALSE)) {
-            HANDLE_WINAPI_ERROR_2(GetOverlappedResult, GetLastError());
+            HANDLE_WINAPI_ERROR(GetOverlappedResult, GetLastError());
             return;
         }
     }
@@ -256,7 +256,7 @@ plat_serpt_read_vcon_from_server(serial_passthrough_t *dev, uint8_t *data)
             if (err == ERROR_IO_PENDING) {
                 OV(dev)->ov_read_pending = TRUE;
             } else {
-                HANDLE_WINAPI_ERROR_2(ReadFile, err);
+                HANDLE_WINAPI_ERROR(ReadFile, err);
             }
         }
     }
