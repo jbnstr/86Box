@@ -56,6 +56,10 @@ typedef struct serial_passthrough_s {
     char  host_serial_path[1024];              /* Path to TTY/host serial port on the host */
     char  named_pipe[1024];                    /* (Windows only) Name of the pipe. */
     void *backend_priv;                        /* Private platform backend data */
+
+    bool highspeed_mode;                       /* High speed comms over named pipe not limited 
+                                                  by an emulated baud rate (Windows only). */
+
 } serial_passthrough_t;
 
 extern bool           serial_passthrough_enabled[SERIAL_MAX - 1];

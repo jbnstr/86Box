@@ -55,7 +55,10 @@ serial_passthrough_init(void)
     for (uint8_t c = 0; c < (SERIAL_MAX - 1); c++) {
         if (serial_passthrough_enabled[c]) {
             /* Instance n for COM n */
-            device_add_inst(&serial_passthrough_device, c + 1);
+            serial_passthrough_t *dev = (serial_passthrough_t *) device_add_inst(&serial_passthrough_device, c + 1);
+            if (dev && dev->highspeed_mode) {
+                serial_enable_highspeed_mode(dev->serial);
+            }
         }
     }
 }
@@ -72,6 +75,19 @@ host_to_serial_cb(void *priv)
     serial_passthrough_t *dev = (serial_passthrough_t *) priv;
 
     uint8_t byte;
+
+    if (dev->highspeed_mode /*&& dev->serial->fifo_enabled*/) {
+        while (!fifo_get_full(dev->serial->rcvr_fifo) && plat_serpt_read(dev, &byte)) {
+
+            // serial_passthrough_log("Read from pipe: %02X\n", byte);
+            serial_write_fifo(dev->serial, byte);
+        }
+
+        /* Re-arm the timer in highspeed mode to poll for new bytes. */
+        timer_on_auto(&dev->host_to_serial_timer, 100.0); // 0.1 ms
+
+        return;
+    }
 
     plat_serpt_set_line_state(priv);
 
@@ -185,6 +201,8 @@ serial_passthrough_dev_init(const device_t *info)
     dev->baudrate  = device_get_config_int("baudrate");
     dev->data_bits = device_get_config_int("data_bits");
 
+    dev->highspeed_mode = device_get_config_int("highspeed_mode");
+
     /* Attach passthrough device to a COM port */
     dev->serial = serial_attach_ex(dev->port, serial_passthrough_rcr_cb,
                                    serial_passthrough_write, serial_passthrough_transmit_period, serial_passthrough_lcr_callback, dev);
@@ -201,6 +219,7 @@ serial_passthrough_dev_init(const device_t *info)
     serial_passthrough_log("%s: port=COM%d\n", info->name, dev->port + 1);
     serial_passthrough_log("%s: baud=%f\n", info->name, dev->baudrate);
     serial_passthrough_log("%s: mode=%s\n", info->name, serpt_mode_names[dev->mode]);
+    serial_passthrough_log("%s: highspeed mode=%d\n", info->name, dev->highspeed_mode);
 
     if (plat_serpt_open_device(dev)) {
         serial_passthrough_log("%s: not running\n", info->name);
@@ -357,6 +376,12 @@ static const device_config_t serial_passthrough_config[] = {
             { .description = ""                          }
         },
         .bios           = { { 0 } }
+    },
+    {
+        .name           = "highspeed_mode",
+        .description    = "Disable baud timing for max speed",
+        .type           = CONFIG_BINARY,
+        .default_int    = 0,
     },
     { .name = "", .description = "", .type = CONFIG_END }
 };

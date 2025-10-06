@@ -74,6 +74,20 @@ typedef struct serial_s {
     uint8_t inst;
     uint8_t transmit_enabled;
     uint8_t fifo_enabled;
+
+   /*
+    * Note: High-speed mode is conceptually a property of the serial passthrough
+    * device, not the serial device itself. However, because the serial device
+    * operates independently and has no direct knowledge of its parent
+    * passthrough, it cannot query that state at runtime.
+    *
+    * Since high-speed mode directly alters how the serial device processes
+    * timing and data transfer, we must mirror this flag here. This duplication
+    * ensures the serial device can make correct decisions without requiring
+    * back-pointers or tight coupling to the passthrough implementation.
+    */
+    uint8_t highspeed_mode_enabled;
+
     uint8_t bits;
     uint8_t data_bits;
     uint8_t baud_cycles;
@@ -149,6 +163,7 @@ extern void      serial_set_dcd(serial_t *dev, uint8_t enabled);
 extern void      serial_set_ri(serial_t *dev, uint8_t enabled);
 extern int       serial_get_ri(serial_t *dev);
 extern uint8_t   serial_get_shadow(serial_t *dev);
+extern void      serial_enable_highspeed_mode(serial_t *dev);
 
 extern const device_t ns8250_device;
 extern const device_t ns8250_pcjr_device;
