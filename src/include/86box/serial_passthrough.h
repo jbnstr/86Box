@@ -28,10 +28,11 @@
 #include <86box/serial.h>
 
 enum serial_passthrough_mode {
-    SERPT_MODE_VCON,    /*Named Pipe (Server) / Pseudo Terminal/Virtual Console */
-    SERPT_MODE_TCPSRV,  /* TCP Server (TODO) */
-    SERPT_MODE_TCPCLNT, /* TCP Client (TODO) */
-    SERPT_MODE_HOSTSER, /* Host Serial Passthrough */
+    SERPT_MODE_VCONSRV,  /* Named Pipe (Server) / Pseudo Terminal/Virtual Console */
+    SERPT_MODE_VCONCLNT, /* Named Pipe (Client) / Pseudo Terminal/Virtual Console */
+    SERPT_MODE_TCPSRV,   /* TCP Server (TODO) */
+    SERPT_MODE_TCPCLNT,  /* TCP Client (TODO) */
+    SERPT_MODE_HOSTSER,  /* Host Serial Passthrough */
     SERPT_MODES_MAX,
 };
 
@@ -52,6 +53,8 @@ typedef struct serial_passthrough_s {
                                                 * socket or alike */
     char  host_serial_path[1024];              /* Path to TTY/host serial port on the host */
     char  named_pipe[1024];                    /* (Windows only) Name of the pipe. */
+    void *backend_ov_priv;                     /* Private data used in async (overlapped) 
+                                                  named pipe I/O (Windows only) */
     void *backend_priv;                        /* Private platform backend data */
 } serial_passthrough_t;
 

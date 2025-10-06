@@ -42,6 +42,7 @@ extern "C" {
 
 extern int ui_msgbox(int flags, void *message);
 extern int ui_msgbox_header(int flags, void *header, void *message);
+extern int ui_msgbox_yesno(int flags, void *title, void *message);
 
 /* Status Bar functions. */
 #define SB_ICON_WIDTH 24

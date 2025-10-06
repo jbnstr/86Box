@@ -178,7 +178,7 @@ serial_passthrough_dev_init(const device_t *info)
 {
     serial_passthrough_t *dev;
 
-    dev = (serial_passthrough_t *) calloc(1, sizeof(serial_passthrough_t));
+    dev       = (serial_passthrough_t *) calloc(1, sizeof(serial_passthrough_t));
     dev->mode = device_get_config_int("mode");
 
     dev->port      = device_get_instance() - 1;
@@ -222,10 +222,11 @@ serial_passthrough_dev_init(const device_t *info)
 }
 
 const char *serpt_mode_names[SERPT_MODES_MAX] = {
-    [SERPT_MODE_VCON]    = "vcon",
-    [SERPT_MODE_TCPSRV]  = "tcpsrv",
-    [SERPT_MODE_TCPCLNT] = "tcpclnt",
-    [SERPT_MODE_HOSTSER] = "hostser",
+    [SERPT_MODE_VCONSRV]  = "vconsrv",
+    [SERPT_MODE_VCONCLNT] = "vconclnt",
+    [SERPT_MODE_TCPSRV]   = "tcpsrv",
+    [SERPT_MODE_TCPCLNT]  = "tcpclnt",
+    [SERPT_MODE_HOSTSER]  = "hostser",
 };
 
 // clang-format off
@@ -240,12 +241,10 @@ static const device_config_t serial_passthrough_config[] = {
         .spinner        = { 0 },
         .selection      = {
 #ifdef _WIN32
-            { .description = "Named Pipe (Server)",             .value = SERPT_MODE_VCON    },
-#if 0 /* TODO */
-            { .description = "Named Pipe (Client)",             .value = SERPT_MODE_VCON    },
-#endif
+            { .description = "Named Pipe (Server)",             .value = SERPT_MODE_VCONSRV    },
+            { .description = "Named Pipe (Client)",             .value = SERPT_MODE_VCONCLNT   },
 #else /* _WIN32 */
-            { .description = "Pseudo Terminal/Virtual Console", .value = SERPT_MODE_VCON    },
+            { .description = "Pseudo Terminal/Virtual Console", .value = SERPT_MODE_VCONSRV    },
 #endif /* _WIN32 */
 #if 0 /* TODO */
             { .description = "TCP Server",                      .value = SERPT_MODE_TCPSRV  },

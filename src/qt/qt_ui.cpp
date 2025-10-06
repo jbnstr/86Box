@@ -206,6 +206,23 @@ ui_msgbox(int flags, void *message)
     return ui_msgbox_header(flags, nullptr, message);
 }
 
+int
+ui_msgbox_yesno(int flags, void *title, void *message)
+{
+    const auto qtitle   = (flags & MBX_ANSI) ? QString(static_cast<char *>(title)) : QString::fromWCharArray(static_cast<const wchar_t *>(title));
+    const auto qmessage = (flags & MBX_ANSI) ? QString(static_cast<char *>(message)) : QString::fromWCharArray(static_cast<const wchar_t *>(message));
+    
+    bool result = false;
+
+    if (main_window == nullptr) {
+        QMessageBox questionBox(QMessageBox::Icon::Question, qtitle, qmessage, QMessageBox::Yes | QMessageBox::No);
+        result = (questionBox.exec() == QMessageBox::Yes);
+    } else {
+        result = main_window->showQuestion(qtitle, qmessage);
+    }
+    return result ? 1 : 0;
+}
+
 void
 ui_sb_update_text()
 {
