@@ -77,6 +77,9 @@ typedef struct serial_s {
     uint8_t inst;
     uint8_t transmit_enabled;
     uint8_t fifo_enabled;
+
+    uint8_t highspeed_enabled;
+
     uint8_t bits;
     uint8_t data_bits;
     uint8_t baud_cycles;
@@ -151,6 +154,7 @@ extern void      serial_set_dsr(serial_t *dev, uint8_t enabled);
 extern void      serial_set_dcd(serial_t *dev, uint8_t enabled);
 extern void      serial_set_ri(serial_t *dev, uint8_t enabled);
 extern int       serial_get_ri(serial_t *dev);
+extern void      serial_enable_highspeed_mode(serial_t *dev);
 
 extern const device_t ns8250_device;
 extern const device_t ns8250_pcjr_device;

@@ -56,6 +56,10 @@ typedef struct serial_passthrough_s {
     void *backend_ov_priv;                     /* Private data used in async (overlapped) 
                                                   named pipe I/O (Windows only) */
     void *backend_priv;                        /* Private platform backend data */
+
+    bool highspeed_mode;                       /* High speed comms over named pipe not limited 
+                                                  by an emulated baud rate (Windows only). */
+
 } serial_passthrough_t;
 
 extern bool           serial_passthrough_enabled[SERIAL_MAX - 1];

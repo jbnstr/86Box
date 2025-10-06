@@ -28,6 +28,7 @@
 #include <86box/fifo.h>
 #endif
 
+#define ENABLE_FIFO_LOG 1
 #ifdef ENABLE_FIFO_LOG
 int fifo_do_log = ENABLE_FIFO_LOG;
 
@@ -112,6 +113,8 @@ fifo_write_tagged(uint8_t tag, uint8_t val, void *priv)
 void
 fifo_write_evt(uint8_t val, void *priv)
 {
+    fifo_log("JBO: fifo_write_evt: %02X\n", val);
+
     fifo_t *fifo = (fifo_t *) priv;
 
     fifo->d_full  = fifo->d_empty = 0;
@@ -419,7 +422,7 @@ void
 fifo_set_trigger_len(void *priv, int trigger_len)
 {
     fifo_t *fifo = (fifo_t *) priv;
-
+    fifo_log("JBO: fifo_set_trigger_len: %d\n", trigger_len);
     fifo->trigger_len = trigger_len;
 }
 
@@ -522,6 +525,8 @@ fifo_init(int len)
         fifo = calloc(1, sizeof(fifo64_t));
     else if (len == 16)
         fifo = calloc(1, sizeof(fifo16_t));
+    else if (len == 1024)
+        fifo = calloc(1, sizeof(fifo1024_t));
     else {
         fatal("FIFO  : Invalid FIFO length: %i\n", len);
         return NULL;
