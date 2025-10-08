@@ -22,6 +22,8 @@
 
 #include <QStatusBar>
 #include <QApplication>
+//#include <QGuiApplication>
+//#include <QClipboard>
 
 #include "qt_mainwindow.hpp"
 #include "qt_machinestatus.hpp"
@@ -54,6 +56,8 @@ extern "C" {
 #include <86box/thread.h>
 #include <86box/network.h>
 #include <86box/machine_status.h>
+
+//#include <86box/keyboard.h>
 
 #ifdef Q_OS_WINDOWS
 #    include <86box/win.h>
@@ -120,6 +124,126 @@ plat_resize(int w, int h, int monitor_index)
 #if defined _WIN32
 extern HWND rw_hwnd;
 #endif
+
+//#define SCAN_CODE_FOR_SHIFT 0x2a
+//
+//void
+//plat_paste_text()
+//{
+//#if defined _WIN32
+//    // kbc_inject_text
+//
+//    QString clipboardText = QGuiApplication::clipboard()->text();
+//
+//    INPUT input = {};
+//    for (QChar ch : clipboardText) {
+//        SHORT vk = ::VkKeyScanExW(ch.unicode(), GetKeyboardLayout(0));
+//        if (vk == -1)
+//            continue; // Could not map character
+//
+//        bool shift = vk & 0x0100;
+//        bool ctrl  = vk & 0x0200;
+//        bool alt   = vk & 0x0400;
+//
+//        UINT scanCode = MapVirtualKey(vk & 0xFF, MAPVK_VK_TO_VSC);
+//
+//        if (shift) {
+//            // Press down the Shift key
+//            win_keyboard_handle(SCAN_CODE_FOR_SHIFT, /*up=*/false, /*e0=*/0, /*e1=*/0);
+//        }
+//
+//        // Type the actual character key
+//        win_keyboard_handle(scanCode, /*up=*/false, /*e0=*/0, /*e1=*/0); // Key down
+//        win_keyboard_handle(scanCode, /*up=*/true, /*e0=*/0, /*e1=*/0);  // Key up
+//
+//        if (shift) {
+//            // Release the Shift key
+//            win_keyboard_handle(SCAN_CODE_FOR_SHIFT, /*up=*/true, /*e0=*/0, /*e1=*/0);
+//        }
+//    }
+//#endif
+//}
+
+//void
+//plat_paste_text()
+//{
+//    QString text = QGuiApplication::clipboard()->text();
+//    if (text.isEmpty())
+//        return;
+//
+//    for (int i = 0; i < text.length(); ++i) {
+//        QChar ch = text[i];
+//
+//        // If this char is \r and next is \n - treat as one Enter
+//        if (ch == '\r' && i + 1 < text.length() && text[i + 1] == '\n') {
+//            keyboard_input(true, 0x1C); // Enter down
+//            keyboard_input(false, 0x1C); // Enter up
+//            i++;                                    // skip the '\n'
+//            Sleep(1);
+//            continue;
+//        }
+//
+//        // If it's just \r or \n alone
+//        if (ch == '\r' || ch == '\n') {
+//            keyboard_input(true, 0x1C);
+//            keyboard_input(false, 0x1C);
+//            Sleep(1);
+//            continue;
+//        }
+//
+//        if (ch == '\t') {
+//            keyboard_input(true, 0x0F);
+//            keyboard_input(false, 0x0F);
+//            Sleep(1);
+//            continue;
+//        }
+//
+//        SHORT vk_combo = VkKeyScanExW(ch.unicode(), GetKeyboardLayout(0));
+//        if (vk_combo == -1)
+//            continue;
+//
+//        BYTE vk    = vk_combo & 0x00FF;
+//        bool shift = vk_combo & 0x0100;
+//        bool ctrl  = vk_combo & 0x0200;
+//        bool alt   = vk_combo & 0x0400;
+//
+//        UINT scancode = MapVirtualKey(vk, MAPVK_VK_TO_VSC);
+//
+//        if (scancode == 0)
+//            continue;
+//
+//        // Modifier key scan codes
+//        constexpr UINT SHIFT_SC = 0x2A;
+//        constexpr UINT CTRL_SC  = 0x1D;
+//        constexpr UINT ALT_SC   = 0x38;
+//
+//        // Press modifiers
+//        if (shift)
+//            keyboard_input(true, SHIFT_SC);
+//        if (ctrl)
+//            keyboard_input(true, CTRL_SC);
+//        if (alt)
+//            keyboard_input(true, ALT_SC);
+//
+//        // if (scancode == 0)
+//        //     continue;
+//
+//        // Press + release
+//        keyboard_input(true, scancode);
+//        keyboard_input(false, scancode);
+//
+//        // Release modifiers if used
+//        if (shift)
+//            keyboard_input(false, SHIFT_SC);
+//        if (ctrl)
+//            keyboard_input(false, CTRL_SC);
+//        if (alt)
+//            keyboard_input(false, ALT_SC);
+//
+//        Sleep(5); // Optional delay //10
+//    }
+//}
+
 
 void
 plat_mouse_capture(int on)

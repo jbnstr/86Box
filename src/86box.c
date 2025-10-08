@@ -272,6 +272,11 @@ struct accelKey def_acc_keys[NUM_ACCELS] = {
         .desc="Release mouse pointer",
         .seq="Ctrl+End"
     },
+    {   
+	    .name = "paste_text",
+		.desc = "Paste from clipboard",
+        .seq = "Ctrl+Alt+Ins" 
+    },
     {
         .name="hard_reset",
         .desc="Hard reset",

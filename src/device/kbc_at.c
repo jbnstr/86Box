@@ -205,6 +205,7 @@ kbc_at_set_fast_reset(const uint8_t new_fast_reset)
     fast_reset = new_fast_reset;
 }
 
+//#define ENABLE_KBC_AT_LOG 1
 #ifdef ENABLE_KBC_AT_LOG
 int kbc_at_do_log = ENABLE_KBC_AT_LOG;
 
@@ -2882,6 +2883,18 @@ kbc_at_port_handler(int num, int set, uint16_t port, void *priv)
                       dev->handlers[num].read, NULL, NULL,
                       dev->handlers[num].write, NULL, NULL, priv);
 }
+
+
+//void
+//kbc_inject_text(atkbc_t *dev, const char *text)
+//{
+//    while (*text) {
+//        uint8_t scan = 0; //char_to_scan(*text); // Your mapping function
+//        kbc_send_to_ob(dev, scan, 1, 0x00); // Channel 1 = keyboard
+//        kbc_do_irq(dev);                    // Simulate IRQ
+//        text++;
+//    }
+//}
 
 void
 kbc_at_handler(int set, uint16_t port, void *priv)

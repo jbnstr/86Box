@@ -87,6 +87,7 @@ private slots:
     void on_actionUpdate_mouse_every_CPU_frame_triggered();
     void on_actionPause_triggered();
     void on_actionCtrl_Alt_Del_triggered();
+    void on_actionPasteText_triggered();
     void on_actionCtrl_Alt_Esc_triggered();
     void on_actionHard_Reset_triggered();
     void on_actionRight_CTRL_is_left_ALT_triggered();

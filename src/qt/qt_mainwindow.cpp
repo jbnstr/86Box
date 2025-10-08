@@ -87,6 +87,10 @@ extern bool cpu_thread_running;
 #include <QString>
 #include <QDir>
 #include <QSysInfo>
+
+#include <QClipboard>
+//#include <windows.h> // for Windows API functions
+
 #if QT_CONFIG(vulkan)
 #    include <QVulkanInstance>
 #    include <QVulkanFunctions>
@@ -981,6 +985,7 @@ void MainWindow::updateShortcuts()
 	// run into conflicts with old ones.
 	ui->actionTake_screenshot->setShortcut(QKeySequence());
 	ui->actionCtrl_Alt_Del->setShortcut(QKeySequence());
+    ui->actionPasteText->setShortcut(QKeySequence());
 	ui->actionCtrl_Alt_Esc->setShortcut(QKeySequence());
 	ui->actionHard_Reset->setShortcut(QKeySequence());
 	ui->actionPause->setShortcut(QKeySequence());
@@ -996,6 +1001,11 @@ void MainWindow::updateShortcuts()
 	accID = FindAccelerator("send_ctrl_alt_del");
 	seq = QKeySequence::fromString(acc_keys[accID].seq);
 	ui->actionCtrl_Alt_Del->setShortcut(seq);
+
+	accID = FindAccelerator("paste_text");
+    seq   = QKeySequence::fromString(acc_keys[accID].seq);
+    ui->actionPasteText->setShortcut(seq);
+
 	
 	accID = FindAccelerator("send_ctrl_alt_esc");
 	seq = QKeySequence::fromString(acc_keys[accID].seq);
@@ -1189,6 +1199,16 @@ void
 MainWindow::on_actionCtrl_Alt_Del_triggered()
 {
     pc_send_cad();
+}
+
+
+
+void plat_paste_text();
+
+void
+MainWindow::on_actionPasteText_triggered()
+{
+    plat_paste_text();
 }
 
 void
@@ -1493,6 +1513,267 @@ MainWindow::FindAcceleratorSeq(const char *name)
 	return(QKeySequence::fromString(acc_keys[accID].seq));
 }
 
+extern void win_keyboard_handle(uint32_t scancode, int up, int e0, int e1);
+//#define SCAN_CODE_FOR_SHIFT 0x2a
+//
+//void
+//plat_paste_text_1()
+//{
+//#if defined _WIN32
+//    // kbc_inject_text
+//
+//    QString clipboardText = QGuiApplication::clipboard()->text();
+//
+//    INPUT input = {};
+//    for (QChar ch : clipboardText) {
+//        SHORT vk = ::VkKeyScanExW(ch.unicode(), GetKeyboardLayout(0));
+//        if (vk == -1)
+//            continue; // Could not map character
+//
+//        bool shift = vk & 0x0100;
+//        bool ctrl  = vk & 0x0200;
+//        bool alt   = vk & 0x0400;
+//
+//        UINT scanCode = MapVirtualKey(vk & 0xFF, MAPVK_VK_TO_VSC);
+//
+//        if (shift) {
+//            // Press down the Shift key
+//            win_keyboard_handle(SCAN_CODE_FOR_SHIFT, /*up=*/false, /*e0=*/0, /*e1=*/0);
+//        }
+//
+//        // Type the actual character key
+//        win_keyboard_handle(scanCode, /*up=*/false, /*e0=*/0, /*e1=*/0); // Key down
+//        win_keyboard_handle(scanCode, /*up=*/true, /*e0=*/0, /*e1=*/0);  // Key up
+//
+//        if (shift) {
+//            // Release the Shift key
+//            win_keyboard_handle(SCAN_CODE_FOR_SHIFT, /*up=*/true, /*e0=*/0, /*e1=*/0);
+//        }
+//    }
+//#endif
+//}
+
+
+//void
+//plat_paste_text_2()
+//{
+//    QString text = QGuiApplication::clipboard()->text();
+//    if (text.isEmpty())
+//        return;
+//
+//    for (QChar ch : text) {
+//        UINT scancode  = 0;
+//        bool isSpecial = false;
+//        SHORT vk_combo = 0;
+//
+//        if (ch == '\r' || ch == '\n') {
+//            scancode  = 0x1C; // Enter
+//            isSpecial = true;
+//        } else if (ch == '\t') {
+//            scancode  = 0x0F; // Tab
+//            isSpecial = true;
+//        } else {
+//            vk_combo = VkKeyScanExW(ch.unicode(), GetKeyboardLayout(0));
+//            if (vk_combo == -1)
+//                continue;
+//
+//            BYTE vk    = vk_combo & 0xFF;
+//            bool shift = vk_combo & 0x0100;
+//            bool ctrl  = vk_combo & 0x0200;
+//            bool alt   = vk_combo & 0x0400;
+//            scancode   = MapVirtualKey(vk, MAPVK_VK_TO_VSC);
+//
+//            // Press modifiers
+//            if (shift)
+//                win_keyboard_handle(0x2A, false, 0, 0);
+//            if (ctrl)
+//                win_keyboard_handle(0x1D, false, 0, 0);
+//            if (alt)
+//                win_keyboard_handle(0x38, false, 0, 0);
+//        }
+//
+//        if (scancode == 0)
+//            continue;
+//
+//        // Press + release
+//        win_keyboard_handle(scancode, false, 0, 0);
+//        win_keyboard_handle(scancode, true, 0, 0);
+//
+//        // Release modifiers if used
+//        if (!isSpecial) {
+//            if (vk_combo & 0x0100)
+//                win_keyboard_handle(0x2A, true, 0, 0);
+//            if (vk_combo & 0x0200)
+//                win_keyboard_handle(0x1D, true, 0, 0);
+//            if (vk_combo & 0x0400)
+//                win_keyboard_handle(0x38, true, 0, 0);
+//        }
+//
+//        Sleep(1); // Optional delay //10
+//    }
+//}
+
+void
+plat_paste_text_ok()
+{
+    QString text = QGuiApplication::clipboard()->text();
+    if (text.isEmpty())
+        return;
+
+    for (int i = 0; i < text.length(); ++i) {
+        QChar ch = text[i];
+
+        // If this char is \r and next is \n - treat as one Enter
+        if (ch == '\r' && i + 1 < text.length() && text[i + 1] == '\n') {
+            win_keyboard_handle(0x1C, false, 0, 0); // Enter down
+            win_keyboard_handle(0x1C, true, 0, 0);  // Enter up
+            i++;                                    // skip the '\n'
+            Sleep(1);
+            continue;
+        }
+
+        // If it's just \r or \n alone
+        if (ch == '\r' || ch == '\n') {
+            win_keyboard_handle(0x1C, false, 0, 0);
+            win_keyboard_handle(0x1C, true, 0, 0);
+            Sleep(1);
+            continue;
+        }
+
+        if (ch == '\t') {
+            win_keyboard_handle(0x0F, false, 0, 0);
+            win_keyboard_handle(0x0F, true, 0, 0);
+            Sleep(1);
+            continue;
+        }
+
+        SHORT vk_combo = VkKeyScanExW(ch.unicode(), GetKeyboardLayout(0));
+        if (vk_combo == -1)
+            continue;
+
+        BYTE vk    = vk_combo & 0x00FF;
+        bool shift = vk_combo & 0x0100;
+        bool ctrl  = vk_combo & 0x0200;
+        bool alt   = vk_combo & 0x0400;
+        
+        UINT scancode   = MapVirtualKey(vk, MAPVK_VK_TO_VSC);
+        
+        if (scancode == 0)
+            continue;
+
+        // Modifier key scan codes
+        constexpr UINT SHIFT_SC = 0x2A;
+        constexpr UINT CTRL_SC  = 0x1D;
+        constexpr UINT ALT_SC   = 0x38;
+        
+        // Press modifiers
+        if (shift)
+            win_keyboard_handle(SHIFT_SC, false, 0, 0);
+        if (ctrl)
+            win_keyboard_handle(CTRL_SC, false, 0, 0);
+        if (alt)
+            win_keyboard_handle(ALT_SC, false, 0, 0);
+        
+
+        //if (scancode == 0)
+        //    continue;
+
+        // Press + release
+        win_keyboard_handle(scancode, false, 0, 0);
+        win_keyboard_handle(scancode, true, 0, 0);
+
+        // Release modifiers if used
+        if (shift)
+            win_keyboard_handle(SHIFT_SC, true, 0, 0);
+        if (ctrl)
+            win_keyboard_handle(CTRL_SC, true, 0, 0);
+        if (alt)
+            win_keyboard_handle(ALT_SC, true, 0, 0);
+
+        Sleep(5); // Optional delay //10
+    }
+}
+
+void
+plat_paste_text()
+{
+    QString text = QGuiApplication::clipboard()->text();
+    if (text.isEmpty())
+        return;
+
+    for (int i = 0; i < text.length(); ++i) {
+        QChar ch = text[i];
+
+        // If this char is \r and next is \n - treat as one Enter
+        if (ch == '\r' && i + 1 < text.length() && text[i + 1] == '\n') {
+            keyboard_input(true, 0x1C);  // Enter down
+            keyboard_input(false, 0x1C); // Enter up
+            i++;                         // skip the '\n'
+            Sleep(1);
+            continue;
+        }
+
+        // If it's just \r or \n alone
+        if (ch == '\r' || ch == '\n') {
+            keyboard_input(true, 0x1C);
+            keyboard_input(false, 0x1C);
+            Sleep(1);
+            continue;
+        }
+
+        if (ch == '\t') {
+            keyboard_input(true, 0x0F);
+            keyboard_input(false, 0x0F);
+            Sleep(1);
+            continue;
+        }
+
+        SHORT vk_combo = VkKeyScanExW(ch.unicode(), GetKeyboardLayout(0));
+        if (vk_combo == -1)
+            continue;
+
+        BYTE vk    = vk_combo & 0x00FF;
+        bool shift = vk_combo & 0x0100;
+        bool ctrl  = vk_combo & 0x0200;
+        bool alt   = vk_combo & 0x0400;
+
+        UINT scancode = MapVirtualKey(vk, MAPVK_VK_TO_VSC);
+
+        if (scancode == 0)
+            continue;
+
+        // Modifier key scan codes
+        constexpr UINT SHIFT_SC = 0x2A;
+        constexpr UINT CTRL_SC  = 0x1D;
+        constexpr UINT ALT_SC   = 0x38;
+
+        // Press modifiers
+        if (shift)
+            keyboard_input(true, SHIFT_SC);
+        if (ctrl)
+            keyboard_input(true, CTRL_SC);
+        if (alt)
+            keyboard_input(true, ALT_SC);
+
+        // if (scancode == 0)
+        //     continue;
+
+        // Press + release
+        keyboard_input(true, scancode);
+        keyboard_input(false, scancode);
+
+        // Release modifiers if used
+        if (shift)
+            keyboard_input(false, SHIFT_SC);
+        if (ctrl)
+            keyboard_input(false, CTRL_SC);
+        if (alt)
+            keyboard_input(false, ALT_SC);
+
+        Sleep(5); // Optional delay //10
+    }
+}
+
 bool
 MainWindow::eventFilter(QObject *receiver, QEvent *event)
 {
@@ -1513,6 +1794,12 @@ MainWindow::eventFilter(QObject *receiver, QEvent *event)
 			{
 				plat_mouse_capture(0);
 			}
+
+            /* Hot key handler to paste text from the host clipboard. */
+            if ((QKeySequence) (ke->key() | ke->modifiers()) == FindAcceleratorSeq("paste_text")) {
+                plat_paste_text();
+            }
+
 		}
 
 		if (event->type() == QEvent::KeyPress && video_fullscreen != 0)
@@ -1539,6 +1826,11 @@ MainWindow::eventFilter(QObject *receiver, QEvent *event)
 			{
 				ui->actionCtrl_Alt_Del->trigger();
 			}
+			
+			if ((QKeySequence) (ke->key() | ke->modifiers()) == FindAcceleratorSeq("paste_text")) {
+                ui->actionPasteText->trigger();
+            }
+            
 			if ((QKeySequence)(ke->key() | (ke->modifiers() & ~Qt::KeypadModifier)) == FindAcceleratorSeq("send_ctrl_alt_esc")
                 || (QKeySequence)(ke->key() | ke->modifiers()) == FindAcceleratorSeq("send_ctrl_alt_esc"))
 			{
